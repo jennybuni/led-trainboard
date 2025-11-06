@@ -1,0 +1,40 @@
+{
+  "last_updated": "2025-06-11T16:00:00Z",
+  "services": [
+    {
+      "sched": "16:05",
+      "destination": "Manchester Piccadilly",
+      "status": "ON TIME",
+      "calling": [
+        "Stockport",
+        "Macclesfield",
+        "Stoke-on-Trent",
+        "Stafford",
+        "Wolverhampton"
+      ]
+    },
+    {
+      "sched": "16:20",
+      "destination": "Birmingham New Street",
+      "status": "Delayed exp 16:40",
+      "calling": [
+        "Tamworth",
+        "Lichfield Trent Valley",
+        "Birmingham International",
+        "Birmingham New Street"
+      ]
+    },
+    {
+      "sched": "16:45",
+      "destination": "Glasgow Central",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Lancaster",
+        "Carlisle",
+        "Motherwell"
+      ]
+    }
+  ]
+}
