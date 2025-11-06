@@ -1,22 +1,103 @@
 {
-  "last_updated": "2025-06-11T16:00:00Z",
+  "last_updated": "2025-06-11T05:00:00Z",
   "services": [
     {
-      "sched": "16:05",
+      "sched": "05:10",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "05:24",
       "destination": "Manchester Piccadilly",
-      "status": "ON TIME",
+      "status": "On time",
       "calling": [
         "Stockport",
         "Macclesfield",
         "Stoke-on-Trent",
         "Stafford",
-        "Wolverhampton"
+        "Crewe",
+        "Manchester Piccadilly"
       ]
     },
     {
-      "sched": "16:20",
+      "sched": "05:39",
+      "destination": "Liverpool Lime Street",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "St Helens Junction",
+        "Edge Hill",
+        "Liverpool Lime Street"
+      ]
+    },
+    {
+      "sched": "06:02",
+      "destination": "Glasgow Central",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Lancaster",
+        "Carlisle",
+        "Motherwell",
+        "Glasgow Central"
+      ]
+    },
+    {
+      "sched": "06:15",
+      "destination": "Bristol Temple Meads",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Parkway",
+        "Bristol Temple Meads"
+      ]
+    },
+    {
+      "sched": "06:28",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Crewe",
+        "Stafford",
+        "Rugby",
+        "Watford Junction",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "06:43",
+      "destination": "Cardiff Central",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Hereford",
+        "Newport",
+        "Cardiff Central"
+      ]
+    },
+    {
+      "sched": "06:58",
+      "destination": "Edinburgh Waverley",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Haymarket",
+        "Edinburgh Waverley"
+      ]
+    },
+    {
+      "sched": "07:11",
       "destination": "Birmingham New Street",
-      "status": "Delayed exp 16:40",
+      "status": "On time",
       "calling": [
         "Tamworth",
         "Lichfield Trent Valley",
@@ -25,7 +106,167 @@
       ]
     },
     {
-      "sched": "16:45",
+      "sched": "07:24",
+      "destination": "Penzance",
+      "status": "Delayed exp 07:34",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Temple Meads",
+        "Exeter St Davids",
+        "Plymouth",
+        "Penzance"
+      ]
+    },
+    {
+      "sched": "07:37",
+      "destination": "Hull",
+      "status": "On time",
+      "calling": [
+        "Sheffield",
+        "Doncaster",
+        "Selby",
+        "Brough",
+        "Hull"
+      ]
+    },
+    {
+      "sched": "07:50",
+      "destination": "Plymouth",
+      "status": "Platform change",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Exeter St Davids",
+        "Plymouth"
+      ]
+    },
+    {
+      "sched": "08:05",
+      "destination": "Leeds",
+      "status": "On time",
+      "calling": [
+        "Huddersfield",
+        "Wakefield Westgate",
+        "Leeds"
+      ]
+    },
+    {
+      "sched": "08:18",
+      "destination": "Aberdeen",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Edinburgh Waverley",
+        "Dundee",
+        "Aberdeen"
+      ]
+    },
+    {
+      "sched": "08:32",
+      "destination": "Blackpool North",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Poulton-le-Fylde",
+        "Blackpool North"
+      ]
+    },
+    {
+      "sched": "08:46",
+      "destination": "Chester",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Runcorn East",
+        "Frodsham",
+        "Chester"
+      ]
+    },
+    {
+      "sched": "09:00",
+      "destination": "Reading",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Banbury",
+        "Oxford",
+        "Reading"
+      ]
+    },
+    {
+      "sched": "09:14",
+      "destination": "Bournemouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Oxford",
+        "Southampton Central",
+        "Bournemouth"
+      ]
+    },
+    {
+      "sched": "09:28",
+      "destination": "Newcastle",
+      "status": "On time",
+      "calling": [
+        "York",
+        "Darlington",
+        "Durham",
+        "Newcastle"
+      ]
+    },
+    {
+      "sched": "09:43",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Nuneaton",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "09:58",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "10:12",
+      "destination": "Manchester Piccadilly",
+      "status": "Delayed exp 10:20",
+      "calling": [
+        "Stockport",
+        "Macclesfield",
+        "Stoke-on-Trent",
+        "Stafford",
+        "Crewe",
+        "Manchester Piccadilly"
+      ]
+    },
+    {
+      "sched": "10:26",
+      "destination": "Liverpool Lime Street",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "St Helens Junction",
+        "Edge Hill",
+        "Liverpool Lime Street"
+      ]
+    },
+    {
+      "sched": "10:39",
       "destination": "Glasgow Central",
       "status": "On time",
       "calling": [
@@ -33,7 +274,635 @@
         "Preston",
         "Lancaster",
         "Carlisle",
-        "Motherwell"
+        "Motherwell",
+        "Glasgow Central"
+      ]
+    },
+    {
+      "sched": "10:54",
+      "destination": "Bristol Temple Meads",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Parkway",
+        "Bristol Temple Meads"
+      ]
+    },
+    {
+      "sched": "11:07",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Crewe",
+        "Stafford",
+        "Rugby",
+        "Watford Junction",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "11:22",
+      "destination": "Cardiff Central",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Hereford",
+        "Newport",
+        "Cardiff Central"
+      ]
+    },
+    {
+      "sched": "11:36",
+      "destination": "Edinburgh Waverley",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Haymarket",
+        "Edinburgh Waverley"
+      ]
+    },
+    {
+      "sched": "11:49",
+      "destination": "Birmingham New Street",
+      "status": "On time",
+      "calling": [
+        "Tamworth",
+        "Lichfield Trent Valley",
+        "Birmingham International",
+        "Birmingham New Street"
+      ]
+    },
+    {
+      "sched": "12:04",
+      "destination": "Penzance",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Temple Meads",
+        "Exeter St Davids",
+        "Plymouth",
+        "Penzance"
+      ]
+    },
+    {
+      "sched": "12:18",
+      "destination": "Hull",
+      "status": "On time",
+      "calling": [
+        "Sheffield",
+        "Doncaster",
+        "Selby",
+        "Brough",
+        "Hull"
+      ]
+    },
+    {
+      "sched": "12:33",
+      "destination": "Plymouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Exeter St Davids",
+        "Plymouth"
+      ]
+    },
+    {
+      "sched": "12:47",
+      "destination": "Leeds",
+      "status": "Cancelled",
+      "calling": [
+        "Huddersfield",
+        "Wakefield Westgate",
+        "Leeds"
+      ]
+    },
+    {
+      "sched": "13:02",
+      "destination": "Aberdeen",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Edinburgh Waverley",
+        "Dundee",
+        "Aberdeen"
+      ]
+    },
+    {
+      "sched": "13:17",
+      "destination": "Blackpool North",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Poulton-le-Fylde",
+        "Blackpool North"
+      ]
+    },
+    {
+      "sched": "13:31",
+      "destination": "Chester",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Runcorn East",
+        "Frodsham",
+        "Chester"
+      ]
+    },
+    {
+      "sched": "13:46",
+      "destination": "Reading",
+      "status": "Short formation",
+      "calling": [
+        "Birmingham New Street",
+        "Banbury",
+        "Oxford",
+        "Reading"
+      ]
+    },
+    {
+      "sched": "14:01",
+      "destination": "Bournemouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Oxford",
+        "Southampton Central",
+        "Bournemouth"
+      ]
+    },
+    {
+      "sched": "14:15",
+      "destination": "Newcastle",
+      "status": "On time",
+      "calling": [
+        "York",
+        "Darlington",
+        "Durham",
+        "Newcastle"
+      ]
+    },
+    {
+      "sched": "14:28",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Nuneaton",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "14:42",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "14:56",
+      "destination": "Manchester Piccadilly",
+      "status": "On time",
+      "calling": [
+        "Stockport",
+        "Macclesfield",
+        "Stoke-on-Trent",
+        "Stafford",
+        "Crewe",
+        "Manchester Piccadilly"
+      ]
+    },
+    {
+      "sched": "15:11",
+      "destination": "Liverpool Lime Street",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "St Helens Junction",
+        "Edge Hill",
+        "Liverpool Lime Street"
+      ]
+    },
+    {
+      "sched": "15:25",
+      "destination": "Glasgow Central",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Lancaster",
+        "Carlisle",
+        "Motherwell",
+        "Glasgow Central"
+      ]
+    },
+    {
+      "sched": "15:40",
+      "destination": "Bristol Temple Meads",
+      "status": "Delayed exp 15:52",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Parkway",
+        "Bristol Temple Meads"
+      ]
+    },
+    {
+      "sched": "15:55",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Crewe",
+        "Stafford",
+        "Rugby",
+        "Watford Junction",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "16:09",
+      "destination": "Cardiff Central",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Hereford",
+        "Newport",
+        "Cardiff Central"
+      ]
+    },
+    {
+      "sched": "16:23",
+      "destination": "Edinburgh Waverley",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Haymarket",
+        "Edinburgh Waverley"
+      ]
+    },
+    {
+      "sched": "16:37",
+      "destination": "Birmingham New Street",
+      "status": "On time",
+      "calling": [
+        "Tamworth",
+        "Lichfield Trent Valley",
+        "Birmingham International",
+        "Birmingham New Street"
+      ]
+    },
+    {
+      "sched": "16:52",
+      "destination": "Penzance",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Temple Meads",
+        "Exeter St Davids",
+        "Plymouth",
+        "Penzance"
+      ]
+    },
+    {
+      "sched": "17:06",
+      "destination": "Hull",
+      "status": "Delayed exp 17:18",
+      "calling": [
+        "Sheffield",
+        "Doncaster",
+        "Selby",
+        "Brough",
+        "Hull"
+      ]
+    },
+    {
+      "sched": "17:19",
+      "destination": "Plymouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Exeter St Davids",
+        "Plymouth"
+      ]
+    },
+    {
+      "sched": "17:33",
+      "destination": "Leeds",
+      "status": "On time",
+      "calling": [
+        "Huddersfield",
+        "Wakefield Westgate",
+        "Leeds"
+      ]
+    },
+    {
+      "sched": "17:47",
+      "destination": "Aberdeen",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Edinburgh Waverley",
+        "Dundee",
+        "Aberdeen"
+      ]
+    },
+    {
+      "sched": "18:02",
+      "destination": "Blackpool North",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Poulton-le-Fylde",
+        "Blackpool North"
+      ]
+    },
+    {
+      "sched": "18:16",
+      "destination": "Chester",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Runcorn East",
+        "Frodsham",
+        "Chester"
+      ]
+    },
+    {
+      "sched": "18:29",
+      "destination": "Reading",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Banbury",
+        "Oxford",
+        "Reading"
+      ]
+    },
+    {
+      "sched": "18:44",
+      "destination": "Bournemouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Oxford",
+        "Southampton Central",
+        "Bournemouth"
+      ]
+    },
+    {
+      "sched": "18:58",
+      "destination": "Newcastle",
+      "status": "On time",
+      "calling": [
+        "York",
+        "Darlington",
+        "Durham",
+        "Newcastle"
+      ]
+    },
+    {
+      "sched": "19:12",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Nuneaton",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "19:26",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Crewe",
+        "Milton Keynes Central",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "19:41",
+      "destination": "Manchester Piccadilly",
+      "status": "Delayed exp 19:55",
+      "calling": [
+        "Stockport",
+        "Macclesfield",
+        "Stoke-on-Trent",
+        "Stafford",
+        "Crewe",
+        "Manchester Piccadilly"
+      ]
+    },
+    {
+      "sched": "19:55",
+      "destination": "Liverpool Lime Street",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "St Helens Junction",
+        "Edge Hill",
+        "Liverpool Lime Street"
+      ]
+    },
+    {
+      "sched": "20:10",
+      "destination": "Glasgow Central",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Lancaster",
+        "Carlisle",
+        "Motherwell",
+        "Glasgow Central"
+      ]
+    },
+    {
+      "sched": "20:24",
+      "destination": "Bristol Temple Meads",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Parkway",
+        "Bristol Temple Meads"
+      ]
+    },
+    {
+      "sched": "20:39",
+      "destination": "London Euston",
+      "status": "On time",
+      "calling": [
+        "Crewe",
+        "Stafford",
+        "Rugby",
+        "Watford Junction",
+        "London Euston"
+      ]
+    },
+    {
+      "sched": "20:53",
+      "destination": "Cardiff Central",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Hereford",
+        "Newport",
+        "Cardiff Central"
+      ]
+    },
+    {
+      "sched": "21:08",
+      "destination": "Edinburgh Waverley",
+      "status": "Platform change",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Haymarket",
+        "Edinburgh Waverley"
+      ]
+    },
+    {
+      "sched": "21:22",
+      "destination": "Birmingham New Street",
+      "status": "On time",
+      "calling": [
+        "Tamworth",
+        "Lichfield Trent Valley",
+        "Birmingham International",
+        "Birmingham New Street"
+      ]
+    },
+    {
+      "sched": "21:37",
+      "destination": "Penzance",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Bristol Temple Meads",
+        "Exeter St Davids",
+        "Plymouth",
+        "Penzance"
+      ]
+    },
+    {
+      "sched": "21:51",
+      "destination": "Hull",
+      "status": "On time",
+      "calling": [
+        "Sheffield",
+        "Doncaster",
+        "Selby",
+        "Brough",
+        "Hull"
+      ]
+    },
+    {
+      "sched": "22:06",
+      "destination": "Plymouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Cheltenham Spa",
+        "Exeter St Davids",
+        "Plymouth"
+      ]
+    },
+    {
+      "sched": "22:19",
+      "destination": "Leeds",
+      "status": "On time",
+      "calling": [
+        "Huddersfield",
+        "Wakefield Westgate",
+        "Leeds"
+      ]
+    },
+    {
+      "sched": "22:33",
+      "destination": "Aberdeen",
+      "status": "On time",
+      "calling": [
+        "Preston",
+        "Carlisle",
+        "Edinburgh Waverley",
+        "Dundee",
+        "Aberdeen"
+      ]
+    },
+    {
+      "sched": "22:48",
+      "destination": "Blackpool North",
+      "status": "On time",
+      "calling": [
+        "Wigan North Western",
+        "Preston",
+        "Poulton-le-Fylde",
+        "Blackpool North"
+      ]
+    },
+    {
+      "sched": "23:03",
+      "destination": "Chester",
+      "status": "On time",
+      "calling": [
+        "Warrington Bank Quay",
+        "Runcorn East",
+        "Frodsham",
+        "Chester"
+      ]
+    },
+    {
+      "sched": "23:17",
+      "destination": "Reading",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Banbury",
+        "Oxford",
+        "Reading"
+      ]
+    },
+    {
+      "sched": "23:32",
+      "destination": "Bournemouth",
+      "status": "On time",
+      "calling": [
+        "Birmingham New Street",
+        "Oxford",
+        "Southampton Central",
+        "Bournemouth"
+      ]
+    },
+    {
+      "sched": "23:45",
+      "destination": "Newcastle",
+      "status": "Delayed exp 23:58",
+      "calling": [
+        "York",
+        "Darlington",
+        "Durham",
+        "Newcastle"
       ]
     }
   ]
