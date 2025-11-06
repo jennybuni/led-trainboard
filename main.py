@@ -28,11 +28,16 @@ except ImportError:
     ntptime = None  # type: ignore
 
 try:
-    from interstate75 import Interstate75, DISPLAY_INTERSTATE75_128X32, SWITCH_A
+    from interstate75 import Interstate75, DISPLAY_INTERSTATE75_128X32, SWITCH_A, SWITCH_B
 except ImportError:
     raise RuntimeError(
         "Could not import Interstate75. Ensure the 'interstate75' module is on the MicroPython filesystem."
     )
+
+try:
+    import _thread
+except ImportError:
+    _thread = None  # type: ignore
 
 
 # -----------------------------------------------------------------------------
@@ -97,6 +102,14 @@ last_source = "defaults"
 wifi_ok = False
 last_button_state = False
 last_button_ms = 0
+last_source_button_state = False
+last_source_button_ms = 0
+svc_schedule_seconds = []
+refresh_thread_running = False
+pending_refresh_result = None
+refresh_lock = _thread.allocate_lock() if _thread else None
+prefer_remote = False
+local_services_cached = None
 
 
 # -----------------------------------------------------------------------------
@@ -183,6 +196,159 @@ def normalise_service(entry):
     return (sched, destination, status, calling)
 
 
+def parse_sched_to_seconds(value):
+    """Convert HH:MM strings to seconds past midnight; return None if parsing fails."""
+    try:
+        text = str(value).strip()
+        if not text or ":" not in text:
+            return None
+        hour_part, minute_part = text.split(":", 1)
+        hour = int(hour_part)
+        digits = ""
+        for ch in minute_part:
+            if ch.isdigit():
+                digits += ch
+                if len(digits) == 2:
+                    break
+        if len(digits) == 0:
+            return None
+        minute = int(digits)
+        if minute < 0 or minute > 59:
+            return None
+        hour %= 24
+        return hour * 3600 + minute * 60
+    except (TypeError, ValueError):
+        return None
+
+
+def service_sort_key(service):
+    """Sorting key placing services in time order, unknown times at end."""
+    sched_seconds = parse_sched_to_seconds(service[0])
+    if sched_seconds is None:
+        sched_seconds = 86400
+    return (sched_seconds, service[1])
+
+
+def find_service_index_for_time(now_secs):
+    """Return index of the first service at or after now_secs (seconds past midnight)."""
+    if not svc_services or not svc_schedule_seconds:
+        return 0
+    fallback_idx = 0
+    lowest_seen = None
+    for idx, sched_secs in enumerate(svc_schedule_seconds):
+        if sched_secs is None:
+            continue
+        if lowest_seen is None or sched_secs < lowest_seen:
+            lowest_seen = sched_secs
+            fallback_idx = idx
+        if now_secs is not None and sched_secs >= now_secs:
+            return idx
+    return fallback_idx
+
+
+def fetch_services_payload():
+    """Load services from local/remote sources without touching display state."""
+    global local_services_cached
+
+    source_label = None
+    attempted_remote = False
+    services = []
+
+    def load_local_from_cache():
+        nonlocal source_label
+        if local_services_cached:
+            source_label = "local"
+            return list(local_services_cached)
+        return []
+
+    def load_local_from_disk():
+        nonlocal source_label
+        global local_services_cached
+        local = load_local_services()
+        if local:
+            source_label = "local"
+            local_services_cached = list(local)
+            return list(local)
+        return []
+
+    def load_remote():
+        nonlocal attempted_remote, source_label
+        if not REMOTE_JSON_URL or not wifi_ok:
+            return []
+        attempted_remote = True
+        remote = load_remote_services()
+        if remote:
+            source_label = "remote"
+            return remote
+        return []
+
+    if prefer_remote and REMOTE_JSON_URL:
+        services = load_remote()
+        if not services:
+            services = load_local_from_cache()
+        if not services:
+            services = load_local_from_disk()
+    else:
+        services = load_local_from_cache()
+        if not services:
+            services = load_local_from_disk()
+        if not services:
+            services = load_remote()
+
+    wifi_drop = attempted_remote and source_label != "remote"
+    return {
+        "services": services,
+        "source": source_label,
+        "wifi_drop": wifi_drop,
+    }
+
+
+def apply_services_payload(services, source_label):
+    """Update global state with freshly loaded services."""
+    global svc_services, svc_schedule_seconds, current_service_idx, last_source, last_rotate_ms
+    global local_services_cached
+
+    services = sorted(services, key=service_sort_key)
+    svc_services = services
+    svc_schedule_seconds = [parse_sched_to_seconds(svc[0]) for svc in svc_services]
+
+    current_service_idx = 0
+    hh, mm, ss = get_local_time()
+    if hh is not None:
+        now_secs = hh * 3600 + mm * 60 + ss
+        current_service_idx = find_service_index_for_time(now_secs)
+
+    apply_service(svc_services[current_service_idx])
+    last_source = source_label or "defaults"
+    if source_label == "local":
+        local_services_cached = list(svc_services)
+    last_rotate_ms = time.ticks_ms()
+    if len(svc_services) > 1:
+        print("Loaded", len(svc_services), "services from", last_source)
+    else:
+        print("Service updated from", last_source)
+
+
+def apply_fetched_services(result):
+    """Handle fetched payload (synchronous or async) and update state."""
+    global wifi_ok
+
+    if not result:
+        return False
+
+    services = result.get("services") or []
+    source_label = result.get("source")
+    if result.get("wifi_drop"):
+        wifi_ok = False
+
+    if not services:
+        print("No service data available; retaining previous values")
+        return False
+
+    apply_services_payload(services, source_label)
+    return True
+
+
 def extract_services(payload):
     services = []
     candidates = []
@@ -252,7 +418,7 @@ def build_ticker_text(raw):
     base = strip_calling_prefix(raw).upper()
     if not base:
         base = "NO CALLING POINTS"
-    return "CALLING AT: " + base + "   |   "
+    return "CALLING AT: " + base + "         "
 
 
 def apply_service(service):
@@ -288,6 +454,49 @@ def advance_service(now_ms, manual=False):
             len(svc_services),
         )
 
+    trigger_fetch(now_ms)
+
+
+def auto_advance_if_due(now_ms):
+    """Advance to the next relevant service once the current departure time has passed."""
+    global current_service_idx, last_rotate_ms
+
+    if not svc_services:
+        return
+
+    hh, mm, ss = get_local_time()
+    if hh is None:
+        return
+    now_secs = hh * 3600 + mm * 60 + ss
+
+    if current_service_idx >= len(svc_services):
+        current_service_idx = 0
+
+    current_sched = None
+    if svc_schedule_seconds and current_service_idx < len(svc_schedule_seconds):
+        current_sched = svc_schedule_seconds[current_service_idx]
+
+    target_idx = find_service_index_for_time(now_secs)
+
+    needs_change = False
+    if current_sched is None:
+        needs_change = len(svc_services) > 1 and target_idx != current_service_idx
+    else:
+        needs_change = now_secs > current_sched and target_idx != current_service_idx
+
+    if needs_change:
+        current_service_idx = target_idx
+        apply_service(svc_services[current_service_idx])
+        last_rotate_ms = now_ms
+        print(
+            "Auto-switched to service",
+            current_service_idx + 1,
+            "of",
+            len(svc_services),
+        )
+
+        trigger_fetch(now_ms)
+
 
 def get_local_time():
     """Return (hh, mm, ss) local using fixed UTC offset."""
@@ -299,34 +508,121 @@ def get_local_time():
 
 
 def refresh_service():
-    global svc_state, ticker_text, ticker_w, ticker_px
-    global last_source, wifi_ok, svc_services, current_service_idx, last_rotate_ms
+    result = fetch_services_payload()
+    return apply_fetched_services(result)
 
-    source_label = None
-    services = load_local_services()
-    if services:
-        source_label = "local"
-    elif REMOTE_JSON_URL and wifi_ok:
-        services = load_remote_services()
-        if services:
-            source_label = "remote"
-        else:
-            wifi_ok = False
 
-    if not services:
-        print("No service data available; retaining previous values")
+def start_async_refresh():
+    """Kick off a background refresh if threading is available."""
+    global refresh_thread_running
+
+    if _thread is None:
         return False
 
-    svc_services = services
-    current_service_idx = 0
-    apply_service(svc_services[current_service_idx])
-    last_source = source_label or "defaults"
-    last_rotate_ms = time.ticks_ms()
-    if len(svc_services) > 1:
-        print("Loaded", len(svc_services), "services from", last_source)
-    else:
-        print("Service updated from", last_source)
+    if pending_refresh_result is not None:
+        return True
+
+    if refresh_thread_running:
+        return True
+
+    refresh_thread_running = True
+
+    def worker():
+        global refresh_thread_running, pending_refresh_result
+        result = None
+        try:
+            result = fetch_services_payload()
+        except Exception as exc:
+            result = {
+                "services": [],
+                "source": None,
+                "wifi_drop": False,
+                "error": "Async refresh failed: {}".format(exc),
+            }
+        if refresh_lock:
+            refresh_lock.acquire()
+            pending_refresh_result = result
+            refresh_lock.release()
+        else:
+            pending_refresh_result = result
+        refresh_thread_running = False
+
+    try:
+        _thread.start_new_thread(worker, ())
+    except Exception as exc:
+        print("Unable to start async refresh:", exc)
+        refresh_thread_running = False
+        return False
+
     return True
+
+
+def poll_async_refresh():
+    """Apply results from a background refresh when ready."""
+    global pending_refresh_result
+
+    if pending_refresh_result is None:
+        return
+
+    if refresh_lock:
+        refresh_lock.acquire()
+        result = pending_refresh_result
+        pending_refresh_result = None
+        refresh_lock.release()
+    else:
+        result = pending_refresh_result
+        pending_refresh_result = None
+
+    if result and result.get("error"):
+        print(result["error"])
+
+    if result:
+        apply_fetched_services(result)
+
+
+def trigger_fetch(now_ms, force=False):
+    """Initiate a data refresh when in remote mode or when forced."""
+    global last_fetch_ms, wifi_ok
+
+    if not REMOTE_JSON_URL:
+        return
+
+    if not force and not prefer_remote:
+        return
+
+    if not force and FETCH_INTERVAL:
+        elapsed = time.ticks_diff(now_ms, last_fetch_ms)
+        if elapsed >= 0 and elapsed < FETCH_INTERVAL * 1000:
+            return
+
+    if REMOTE_JSON_URL and not wifi_ok:
+        wifi_ok = connect_wifi()
+        if wifi_ok:
+            sync_time()
+
+    if not start_async_refresh():
+        refresh_service()
+
+    last_fetch_ms = now_ms
+
+
+def toggle_data_source(now_ms):
+    """Flip between local-first and remote-first service loading."""
+    global prefer_remote, last_fetch_ms
+
+    if not prefer_remote and not REMOTE_JSON_URL:
+        print("Remote JSON URL not configured; staying on local data")
+        return
+
+    prefer_remote = not prefer_remote
+    mode = "REMOTE" if prefer_remote else "LOCAL"
+    print("Source preference switched to", mode, "priority")
+
+    if prefer_remote:
+        trigger_fetch(now_ms, force=True)
+    else:
+        refresh_service()
+        last_fetch_ms = now_ms
 
 
 # -----------------------------------------------------------------------------
@@ -404,7 +700,8 @@ def main():
     global svc_state, ticker_text, ticker_w, ticker_px
     global last_fetch_ms, last_scroll_ms, last_rotate_ms
     global wifi_ok, svc_services, current_service_idx
-    global last_button_state, last_button_ms
+    global last_button_state, last_button_ms, svc_schedule_seconds
+    global last_source_button_state, last_source_button_ms, prefer_remote
 
     graphics.set_font(FONT_NAME)
 
@@ -417,6 +714,7 @@ def main():
 
     svc_services = [default_service]
     current_service_idx = 0
+    svc_schedule_seconds = [parse_sched_to_seconds(default_service[0])]
     apply_service(default_service)
 
     now_ms = time.ticks_ms()
@@ -425,6 +723,8 @@ def main():
     last_rotate_ms = now_ms
     last_button_ms = now_ms
     last_button_state = i75.switch_pressed(SWITCH_A)
+    last_source_button_ms = now_ms
+    last_source_button_state = i75.switch_pressed(SWITCH_B)
 
     if REMOTE_JSON_URL:
         wifi_ok = connect_wifi()
@@ -436,17 +736,9 @@ def main():
     while True:
         now = time.ticks_ms()
 
-        if time.ticks_diff(now, last_fetch_ms) >= FETCH_INTERVAL * 1000:
-            last_fetch_ms = now
-            updated = refresh_service()
-            if not updated and REMOTE_JSON_URL and not wifi_ok:
-                wifi_ok = connect_wifi()
-                if wifi_ok:
-                    sync_time()
-                    refresh_service()
+        poll_async_refresh()
 
-        if len(svc_services) > 1 and time.ticks_diff(now, last_rotate_ms) >= SERVICE_ROTATE_INTERVAL * 1000:
-            advance_service(now, manual=False)
+        auto_advance_if_due(now)
 
         pressed = i75.switch_pressed(SWITCH_A)
         if pressed != last_button_state and time.ticks_diff(now, last_button_ms) >= BUTTON_DEBOUNCE_MS:
@@ -454,6 +746,16 @@ def main():
             last_button_state = pressed
             if pressed:
                 advance_service(now, manual=True)
+
+        source_pressed = i75.switch_pressed(SWITCH_B)
+        if (
+            source_pressed != last_source_button_state
+            and time.ticks_diff(now, last_source_button_ms) >= BUTTON_DEBOUNCE_MS
+        ):
+            last_source_button_ms = now
+            last_source_button_state = source_pressed
+            if source_pressed:
+                toggle_data_source(now)
 
         if ticker_text and time.ticks_diff(now, last_scroll_ms) >= TICKER_MS:
             last_scroll_ms = now
