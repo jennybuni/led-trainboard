@@ -4,8 +4,14 @@ import network, time, machine, json, ure, ubinascii, socket
 CFG_FILE = "config.json"
 
 DEFAULTS = {
-    "LIVE_MODE": True,
+    "LIVE_MODE": False,
+    "LIVE_SOURCE": "openldb",
     "LIVE_URL": "http://192.168.1.50:8080/next.json",
+    "OPENLDB_URL": "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx",
+    "OPENLDB_CRS": "OXN",
+    "OPENLDB_ROWS": 6,
+    "OPENLDB_TIME_WINDOW": 120,
+    "OPENLDB_SOAP_VERSION": "2017-10-01",
     "FETCH_INTERVAL": 60,
     "UTC_OFFSET_HOURS": 0,
     "DEFAULT_SCHED": "12:24",
@@ -29,8 +35,17 @@ def save_config(cfg):
         json.dump(cfg, f)
 
 def write_secrets(ssid, pw):
+    token = ""
+    try:
+        from secrets import OPENLDB_TOKEN  # type: ignore
+        token = OPENLDB_TOKEN
+    except Exception:
+        pass
     with open("secrets.py", "w") as f:
-        f.write('WIFI_SSID=%r\nWIFI_PASSWORD=%r\n' % (ssid, pw))
+        f.write(
+            'WIFI_SSID=%r\nWIFI_PASSWORD=%r\nOPENLDB_TOKEN=%r\n'
+            % (ssid, pw, token)
+        )
 
 def _set_ap_config(ap, **kwargs):
     """Call ap.config with compatibility for essid/ssid and password/key."""
@@ -124,7 +139,15 @@ def serve():
     <label>LIVE_MODE
       <select name="LIVE_MODE"><option %s value="1">True</option><option %s value="0">False</option></select>
     </label>
+    <label>LIVE_SOURCE
+      <select name="LIVE_SOURCE"><option %s value="openldb">OpenLDB</option><option %s value="json">Custom JSON</option></select>
+    </label>
     <label>LIVE_URL <input name="LIVE_URL" value="%s"></label>
+    <label>OPENLDB_URL <input name="OPENLDB_URL" value="%s"></label>
+    <label>OPENLDB_CRS <input name="OPENLDB_CRS" value="%s"></label>
+    <label>OPENLDB_ROWS <input name="OPENLDB_ROWS" type="number" value="%d"></label>
+    <label>OPENLDB_TIME_WINDOW (minutes) <input name="OPENLDB_TIME_WINDOW" type="number" value="%d"></label>
+    <label>OPENLDB_SOAP_VERSION <input name="OPENLDB_SOAP_VERSION" value="%s"></label>
     <label>FETCH_INTERVAL (seconds) <input name="FETCH_INTERVAL" type="number" value="%d"></label>
     <label>UTC_OFFSET_HOURS <input name="UTC_OFFSET_HOURS" type="number" value="%d"></label>
     <label>DEFAULT_SCHED <input name="DEFAULT_SCHED" value="%s"></label>
@@ -137,7 +160,12 @@ def serve():
     <p>Browse to: <b>http://%s</b></p>
     </body></html>""" % (
         "selected" if cfg["LIVE_MODE"] else "", "" if cfg["LIVE_MODE"] else "selected",
-        cfg["LIVE_URL"], int(cfg["FETCH_INTERVAL"]), int(cfg["UTC_OFFSET_HOURS"]),
+        "selected" if cfg["LIVE_SOURCE"] == "openldb" else "",
+        "selected" if cfg["LIVE_SOURCE"] == "json" else "",
+        cfg["LIVE_URL"],
+        cfg["OPENLDB_URL"], cfg["OPENLDB_CRS"], int(cfg["OPENLDB_ROWS"]),
+        int(cfg["OPENLDB_TIME_WINDOW"]), cfg["OPENLDB_SOAP_VERSION"],
+        int(cfg["FETCH_INTERVAL"]), int(cfg["UTC_OFFSET_HOURS"]),
         cfg["DEFAULT_SCHED"], cfg["DEFAULT_DESTINATION"], cfg["DEFAULT_STATUS"], cfg["DEFAULT_CALLING"],
         essid, ap_ip)
 
@@ -158,8 +186,15 @@ def serve():
 
                 new = load_config()
                 new["LIVE_MODE"] = data.get("LIVE_MODE", "1") == "1"
+                new["LIVE_SOURCE"] = data.get("LIVE_SOURCE", new["LIVE_SOURCE"])
                 new["LIVE_URL"] = data.get("LIVE_URL", new["LIVE_URL"])
-                for k in ("FETCH_INTERVAL", "UTC_OFFSET_HOURS"):
+                new["OPENLDB_URL"] = data.get("OPENLDB_URL", new["OPENLDB_URL"])
+                new["OPENLDB_CRS"] = data.get("OPENLDB_CRS", new["OPENLDB_CRS"]).upper()
+                new["OPENLDB_SOAP_VERSION"] = data.get(
+                    "OPENLDB_SOAP_VERSION",
+                    new["OPENLDB_SOAP_VERSION"],
+                )
+                for k in ("FETCH_INTERVAL", "UTC_OFFSET_HOURS", "OPENLDB_ROWS", "OPENLDB_TIME_WINDOW"):
                     try:
                         new[k] = int(data.get(k, new[k]))
                     except Exception:
@@ -169,7 +204,7 @@ def serve():
                 save_config(new)
 
                 cl.send(b"HTTP/1.1 200 OK\r\nContent-Type:text/html\r\n\r\n"
-                        b"<meta http-equiv='refresh' content='2;url=/'><body>Saved. Rebooting\u2026</body>")
+                        b"<meta http-equiv='refresh' content='2;url=/'><body>Saved. Rebooting...</body>")
                 cl.close()
                 time.sleep(2)
                 machine.reset()
@@ -185,4 +220,3 @@ def serve():
             cl.close()
 
 serve()
-

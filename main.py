@@ -3,8 +3,9 @@ main.py - Interstate 75 W train departure board.
 
 Displays departure information on a 128x32 panel using the built-in bitmap font.
 Service data is sourced from a JSON file located on-device or served from a local
-Docker container (HTTP). The script rotates through multiple services every five
-minutes (or on button press) and falls back to defaults if no data is available.
+HTTP JSON endpoint, or directly from National Rail OpenLDB SOAP. The script
+rotates through multiple services every five minutes (or on button press) and
+falls back to defaults if no data is available.
 """
 
 import time
@@ -13,9 +14,7 @@ import json
 try:
     import urequests as requests  # type: ignore
 except ImportError:
-    raise RuntimeError(
-        "urequests module not found. Use Pimoroni's MicroPython build or install it manually."
-    )
+    requests = None  # type: ignore
 
 try:
     import network
@@ -44,9 +43,16 @@ except ImportError:
 # Configuration
 # -----------------------------------------------------------------------------
 
+CONFIG_JSON_PATH = "config.json"
 LOCAL_JSON_PATH = "departures.json"  # set to None to skip local file lookups
-REMOTE_JSON_URL = "http://192.168.1.50:8000/departures.json"  # set to None if unused
-FETCH_INTERVAL = 30  # seconds between data refreshes
+REMOTE_JSON_URL = None  # populated from config.json when LIVE_MODE is enabled
+LIVE_SOURCE = "json"  # "json" or "openldb"
+OPENLDB_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx"
+OPENLDB_CRS = "OXN"
+OPENLDB_ROWS = 6
+OPENLDB_TIME_WINDOW = 120
+OPENLDB_SOAP_VERSION = "2017-10-01"
+FETCH_INTERVAL = 60  # seconds between data refreshes
 SERVICE_ROTATE_INTERVAL = 300  # seconds between service rotations
 UTC_OFFSET_HOURS = 0  # adjust if you want local time displayed
 
@@ -58,6 +64,25 @@ DEFAULT_SERVICE = {
     "destination": "London Euston",
     "status": "On time",
     "calling": "Watford Junction, Milton Keynes Central, Rugby, Coventry, Birmingham Int'l",
+}
+
+DEFAULT_CONFIG = {
+    "LIVE_MODE": False,
+    "LIVE_SOURCE": LIVE_SOURCE,
+    "LIVE_URL": "",
+    "OPENLDB_URL": OPENLDB_URL,
+    "OPENLDB_CRS": OPENLDB_CRS,
+    "OPENLDB_ROWS": OPENLDB_ROWS,
+    "OPENLDB_TIME_WINDOW": OPENLDB_TIME_WINDOW,
+    "OPENLDB_SOAP_VERSION": OPENLDB_SOAP_VERSION,
+    "LOCAL_JSON_PATH": LOCAL_JSON_PATH,
+    "FETCH_INTERVAL": FETCH_INTERVAL,
+    "SERVICE_ROTATE_INTERVAL": SERVICE_ROTATE_INTERVAL,
+    "UTC_OFFSET_HOURS": UTC_OFFSET_HOURS,
+    "DEFAULT_SCHED": DEFAULT_SERVICE["sched"],
+    "DEFAULT_DESTINATION": DEFAULT_SERVICE["destination"],
+    "DEFAULT_STATUS": DEFAULT_SERVICE["status"],
+    "DEFAULT_CALLING": DEFAULT_SERVICE["calling"],
 }
 
 # Ticker timing (pixel-based)
@@ -112,6 +137,87 @@ prefer_remote = False
 local_services_cached = None
 
 
+def _bool_from_config(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _int_from_config(value, fallback):
+    try:
+        return int(value)
+    except Exception:
+        return fallback
+
+
+def load_runtime_config():
+    """Load on-device runtime settings from config.json."""
+    cfg = DEFAULT_CONFIG.copy()
+    try:
+        with open(CONFIG_JSON_PATH) as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            for key, value in loaded.items():
+                cfg[key] = value
+    except OSError:
+        print("config.json missing; using built-in defaults")
+    except Exception as exc:
+        print("config.json error:", exc)
+
+    return cfg
+
+
+def apply_runtime_config():
+    """Apply config.json values to module-level settings."""
+    global LOCAL_JSON_PATH, REMOTE_JSON_URL, FETCH_INTERVAL, SERVICE_ROTATE_INTERVAL
+    global UTC_OFFSET_HOURS, DEFAULT_SERVICE, prefer_remote
+    global LIVE_SOURCE, OPENLDB_URL, OPENLDB_CRS, OPENLDB_ROWS, OPENLDB_TIME_WINDOW
+    global OPENLDB_SOAP_VERSION
+
+    cfg = load_runtime_config()
+
+    LIVE_SOURCE = str(cfg.get("LIVE_SOURCE") or LIVE_SOURCE).strip().lower()
+    LOCAL_JSON_PATH = cfg.get("LOCAL_JSON_PATH") or LOCAL_JSON_PATH
+    FETCH_INTERVAL = _int_from_config(cfg.get("FETCH_INTERVAL"), FETCH_INTERVAL)
+    SERVICE_ROTATE_INTERVAL = _int_from_config(
+        cfg.get("SERVICE_ROTATE_INTERVAL"),
+        SERVICE_ROTATE_INTERVAL,
+    )
+    UTC_OFFSET_HOURS = _int_from_config(cfg.get("UTC_OFFSET_HOURS"), UTC_OFFSET_HOURS)
+
+    DEFAULT_SERVICE = {
+        "sched": str(cfg.get("DEFAULT_SCHED") or DEFAULT_SERVICE["sched"]),
+        "destination": str(
+            cfg.get("DEFAULT_DESTINATION") or DEFAULT_SERVICE["destination"]
+        ),
+        "status": str(cfg.get("DEFAULT_STATUS") or DEFAULT_SERVICE["status"]),
+        "calling": str(cfg.get("DEFAULT_CALLING") or DEFAULT_SERVICE["calling"]),
+    }
+
+    prefer_remote = _bool_from_config(cfg.get("LIVE_MODE"))
+    live_url = str(cfg.get("LIVE_URL") or "").strip()
+    REMOTE_JSON_URL = live_url or None
+    OPENLDB_URL = str(cfg.get("OPENLDB_URL") or OPENLDB_URL).strip()
+    OPENLDB_CRS = str(cfg.get("OPENLDB_CRS") or OPENLDB_CRS).strip().upper()
+    OPENLDB_ROWS = _int_from_config(cfg.get("OPENLDB_ROWS"), OPENLDB_ROWS)
+    OPENLDB_TIME_WINDOW = _int_from_config(
+        cfg.get("OPENLDB_TIME_WINDOW"),
+        OPENLDB_TIME_WINDOW,
+    )
+    OPENLDB_SOAP_VERSION = str(
+        cfg.get("OPENLDB_SOAP_VERSION") or OPENLDB_SOAP_VERSION
+    ).strip()
+
+    print(
+        "Data mode:",
+        LIVE_SOURCE if prefer_remote else "local",
+        "local file:",
+        LOCAL_JSON_PATH,
+    )
+
+
 # -----------------------------------------------------------------------------
 # Networking helpers
 # -----------------------------------------------------------------------------
@@ -159,6 +265,12 @@ def sync_time():
         print("Time synchronised via NTP")
     except Exception as exc:
         print("NTP sync failed:", exc)
+
+
+def live_source_configured():
+    if LIVE_SOURCE == "openldb":
+        return bool(OPENLDB_URL and OPENLDB_CRS)
+    return bool(REMOTE_JSON_URL)
 
 
 # -----------------------------------------------------------------------------
@@ -273,7 +385,7 @@ def fetch_services_payload():
 
     def load_remote():
         nonlocal attempted_remote, source_label
-        if not REMOTE_JSON_URL or not wifi_ok:
+        if not live_source_configured() or not wifi_ok:
             return []
         attempted_remote = True
         remote = load_remote_services()
@@ -282,7 +394,7 @@ def fetch_services_payload():
             return remote
         return []
 
-    if prefer_remote and REMOTE_JSON_URL:
+    if prefer_remote and live_source_configured():
         services = load_remote()
         if not services:
             services = load_local_from_cache()
@@ -375,6 +487,145 @@ def extract_services(payload):
     return services
 
 
+def xml_unescape(text):
+    """Minimal XML entity unescape for OpenLDB response fields."""
+    if text is None:
+        return ""
+    return (
+        text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&apos;", "'")
+    )
+
+
+def _tag_local_name(raw_tag):
+    tag = raw_tag.strip()
+    if not tag:
+        return ""
+    if tag[0] == "/":
+        tag = tag[1:]
+    if tag.endswith("/"):
+        tag = tag[:-1]
+    tag = tag.split(None, 1)[0]
+    if ":" in tag:
+        tag = tag.split(":", 1)[1]
+    return tag
+
+
+def find_xml_blocks(xml, tag_name, start=0):
+    """Return XML element bodies by local tag name, ignoring namespace prefixes."""
+    blocks = []
+    pos = start
+    while True:
+        open_start = xml.find("<", pos)
+        if open_start < 0:
+            break
+        open_end = xml.find(">", open_start)
+        if open_end < 0:
+            break
+
+        raw_open = xml[open_start + 1 : open_end]
+        if raw_open.startswith("/") or raw_open.startswith("?") or raw_open.startswith("!"):
+            pos = open_end + 1
+            continue
+
+        if _tag_local_name(raw_open) != tag_name:
+            pos = open_end + 1
+            continue
+
+        open_tag = raw_open.split(None, 1)[0].rstrip("/")
+        if raw_open.rstrip().endswith("/"):
+            blocks.append("")
+            pos = open_end + 1
+            continue
+
+        close_tag = "</" + open_tag + ">"
+        close_start = xml.find(close_tag, open_end + 1)
+        if close_start < 0:
+            pos = open_end + 1
+            continue
+
+        blocks.append(xml[open_end + 1 : close_start])
+        pos = close_start + len(close_tag)
+
+    return blocks
+
+
+def find_xml_text(xml, tag_name, fallback=""):
+    blocks = find_xml_blocks(xml, tag_name)
+    if not blocks:
+        return fallback
+    return xml_unescape(blocks[0]).strip()
+
+
+def build_openldb_request(token):
+    """Build a compact GetDepBoardWithDetails SOAP request."""
+    ldb_ns = "http://thalesgroup.com/RTTI/{}/ldb/".format(OPENLDB_SOAP_VERSION)
+    soap_action = "http://thalesgroup.com/RTTI/{}/ldb/GetDepBoardWithDetails".format(
+        OPENLDB_SOAP_VERSION
+    )
+    body = """<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types" xmlns:ldb="{ldb_ns}">
+  <soap:Header>
+    <typ:AccessToken>
+      <typ:TokenValue>{token}</typ:TokenValue>
+    </typ:AccessToken>
+  </soap:Header>
+  <soap:Body>
+    <ldb:GetDepBoardWithDetailsRequest>
+      <ldb:numRows>{rows}</ldb:numRows>
+      <ldb:crs>{crs}</ldb:crs>
+      <ldb:timeOffset>0</ldb:timeOffset>
+      <ldb:timeWindow>{time_window}</ldb:timeWindow>
+    </ldb:GetDepBoardWithDetailsRequest>
+  </soap:Body>
+</soap:Envelope>""".format(
+        ldb_ns=ldb_ns,
+        token=token,
+        rows=OPENLDB_ROWS,
+        crs=OPENLDB_CRS,
+        time_window=OPENLDB_TIME_WINDOW,
+    )
+    return soap_action, body
+
+
+def parse_openldb_services(xml):
+    """Extract display services from a GetDepBoardWithDetails SOAP response."""
+    services = []
+    for service_xml in find_xml_blocks(xml, "service"):
+        sched = find_xml_text(service_xml, "std")
+        destination_xml = find_xml_blocks(service_xml, "destination")
+        destination = ""
+        if destination_xml:
+            destination = find_xml_text(destination_xml[0], "locationName")
+        if not destination:
+            destination = find_xml_text(service_xml, "destination")
+
+        status = find_xml_text(service_xml, "etd", "On time")
+        calling = []
+        subsequent = find_xml_blocks(service_xml, "subsequentCallingPoints")
+        search_area = subsequent[0] if subsequent else service_xml
+        for calling_xml in find_xml_blocks(search_area, "callingPoint"):
+            name = find_xml_text(calling_xml, "locationName")
+            if name:
+                calling.append(name)
+
+        svc = normalise_service(
+            {
+                "sched": sched,
+                "destination": destination,
+                "status": status,
+                "calling": calling,
+            }
+        )
+        if svc:
+            services.append(svc)
+
+    return services
+
+
 def load_local_services():
     if not LOCAL_JSON_PATH:
         return []
@@ -390,7 +641,13 @@ def load_local_services():
 
 
 def load_remote_services():
+    if LIVE_SOURCE == "openldb":
+        return load_openldb_services()
+
     if not REMOTE_JSON_URL:
+        return []
+    if requests is None:
+        print("urequests unavailable; cannot load remote JSON")
         return []
     resp = None
     try:
@@ -407,6 +664,46 @@ def load_remote_services():
             except Exception:
                 pass
     return result
+
+
+def load_openldb_services():
+    if requests is None:
+        print("urequests unavailable; cannot load OpenLDB")
+        return []
+
+    try:
+        from secrets import OPENLDB_TOKEN  # type: ignore
+    except ImportError:
+        print("OPENLDB_TOKEN missing from secrets.py")
+        return []
+
+    token = str(OPENLDB_TOKEN or "").strip()
+    if not token:
+        print("OPENLDB_TOKEN is empty")
+        return []
+
+    soap_action, body = build_openldb_request(token)
+    headers = {
+        "Content-Type": "text/xml; charset=utf-8",
+        "SOAPAction": soap_action,
+    }
+    resp = None
+    try:
+        resp = requests.post(OPENLDB_URL, data=body, headers=headers)
+        xml = resp.text
+        services = parse_openldb_services(xml)
+        if not services:
+            print("OpenLDB returned no displayable services")
+        return services
+    except Exception as exc:
+        print("OpenLDB error:", exc)
+        return []
+    finally:
+        if resp:
+            try:
+                resp.close()
+            except Exception:
+                pass
 
 
 def strip_calling_prefix(text):
@@ -584,7 +881,7 @@ def trigger_fetch(now_ms, force=False):
     """Initiate a data refresh when in remote mode or when forced."""
     global last_fetch_ms, wifi_ok
 
-    if not REMOTE_JSON_URL:
+    if not live_source_configured():
         return
 
     if not force and not prefer_remote:
@@ -595,7 +892,7 @@ def trigger_fetch(now_ms, force=False):
         if elapsed >= 0 and elapsed < FETCH_INTERVAL * 1000:
             return
 
-    if REMOTE_JSON_URL and not wifi_ok:
+    if live_source_configured() and not wifi_ok:
         wifi_ok = connect_wifi()
         if wifi_ok:
             sync_time()
@@ -610,8 +907,8 @@ def toggle_data_source(now_ms):
     """Flip between local-first and remote-first service loading."""
     global prefer_remote, last_fetch_ms
 
-    if not prefer_remote and not REMOTE_JSON_URL:
-        print("Remote JSON URL not configured; staying on local data")
+    if not prefer_remote and not live_source_configured():
+        print("Live source not configured; staying on local data")
         return
 
     prefer_remote = not prefer_remote
@@ -703,6 +1000,7 @@ def main():
     global last_button_state, last_button_ms, svc_schedule_seconds
     global last_source_button_state, last_source_button_ms, prefer_remote
 
+    apply_runtime_config()
     graphics.set_font(FONT_NAME)
 
     default_service = (
@@ -726,7 +1024,7 @@ def main():
     last_source_button_ms = now_ms
     last_source_button_state = i75.switch_pressed(SWITCH_B)
 
-    if REMOTE_JSON_URL:
+    if prefer_remote and live_source_configured():
         wifi_ok = connect_wifi()
         if wifi_ok:
             sync_time()
