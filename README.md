@@ -13,8 +13,8 @@ board filesystem:
 - `departures.json`
 - `secrets.py` if you enable live HTTP mode
 
-With the checked-in `config.json`, the board runs from the local
-`departures.json` file and does not need Wi-Fi or a companion server.
+With the checked-in `config.json`, the board runs in live OpenLDB mode and uses
+`departures.json` as a fallback if Wi-Fi or the API is unavailable.
 
 ## Live OpenLDB mode
 
@@ -27,7 +27,9 @@ To fetch official National Rail OpenLDB data directly from the board, update
   "LIVE_SOURCE": "openldb",
   "OPENLDB_CRS": "OXN",
   "OPENLDB_ROWS": 6,
-  "OPENLDB_TIME_WINDOW": 119
+  "OPENLDB_TIME_WINDOW": 119,
+  "OPENLDB_SOAP_VERSION": "2017-10-01",
+  "OPENLDB_SOAP_ACTION_VERSION": "2015-05-14"
 }
 ```
 
@@ -42,6 +44,26 @@ OPENLDB_TOKEN = "your-openldb-consumer-key"
 The app uses `GetDepBoardWithDetails` so it can display departure time,
 destination, live status, and subsequent calling points from one small SOAP
 request.
+
+## Clock sync
+
+When Wi-Fi is available, the board syncs its RTC from NTP at startup and then
+resyncs periodically. The checked-in config uses `pool.ntp.org`, resyncs hourly,
+and applies UK daylight saving time automatically:
+
+```json
+{
+  "NTP_HOST": "pool.ntp.org",
+  "NTP_SYNC_INTERVAL": 3600,
+  "UTC_OFFSET_HOURS": 0,
+  "AUTO_UK_DST": true
+}
+```
+
+If NTP or OpenLDB logs error `-2` after Wi-Fi connects, the board is usually
+connected to the network but cannot resolve hostnames. The checked-in config
+sets `WIFI_DNS` to `gateway`, which uses the router as DNS, and prints the full
+network config after connect.
 
 ## Live custom JSON mode
 

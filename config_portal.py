@@ -12,8 +12,16 @@ DEFAULTS = {
     "OPENLDB_ROWS": 6,
     "OPENLDB_TIME_WINDOW": 119,
     "OPENLDB_SOAP_VERSION": "2017-10-01",
+    "OPENLDB_SOAP_ACTION_VERSION": "2015-05-14",
     "FETCH_INTERVAL": 60,
     "UTC_OFFSET_HOURS": 0,
+    "AUTO_UK_DST": True,
+    "NTP_HOST": "pool.ntp.org",
+    "NTP_SYNC_INTERVAL": 3600,
+    "WIFI_COUNTRY": "GB",
+    "WIFI_CONNECT_TIMEOUT": 20,
+    "WIFI_DNS": "gateway",
+    "WIFI_DNS_FALLBACKS": "gateway,1.1.1.1,8.8.8.8",
     "DEFAULT_SCHED": "12:24",
     "DEFAULT_DESTINATION": "LONDON EUSTON",
     "DEFAULT_STATUS": "ON TIME",
@@ -148,8 +156,18 @@ def serve():
     <label>OPENLDB_ROWS <input name="OPENLDB_ROWS" type="number" value="%d"></label>
     <label>OPENLDB_TIME_WINDOW (minutes) <input name="OPENLDB_TIME_WINDOW" type="number" value="%d"></label>
     <label>OPENLDB_SOAP_VERSION <input name="OPENLDB_SOAP_VERSION" value="%s"></label>
+    <label>OPENLDB_SOAP_ACTION_VERSION <input name="OPENLDB_SOAP_ACTION_VERSION" value="%s"></label>
     <label>FETCH_INTERVAL (seconds) <input name="FETCH_INTERVAL" type="number" value="%d"></label>
     <label>UTC_OFFSET_HOURS <input name="UTC_OFFSET_HOURS" type="number" value="%d"></label>
+    <label>AUTO_UK_DST
+      <select name="AUTO_UK_DST"><option %s value="1">True</option><option %s value="0">False</option></select>
+    </label>
+    <label>NTP_HOST <input name="NTP_HOST" value="%s"></label>
+    <label>NTP_SYNC_INTERVAL (seconds) <input name="NTP_SYNC_INTERVAL" type="number" value="%d"></label>
+    <label>WIFI_COUNTRY <input name="WIFI_COUNTRY" value="%s"></label>
+    <label>WIFI_CONNECT_TIMEOUT (seconds) <input name="WIFI_CONNECT_TIMEOUT" type="number" value="%d"></label>
+    <label>WIFI_DNS <input name="WIFI_DNS" value="%s"></label>
+    <label>WIFI_DNS_FALLBACKS <input name="WIFI_DNS_FALLBACKS" value="%s"></label>
     <label>DEFAULT_SCHED <input name="DEFAULT_SCHED" value="%s"></label>
     <label>DEFAULT_DESTINATION <input name="DEFAULT_DESTINATION" value="%s"></label>
     <label>DEFAULT_STATUS <input name="DEFAULT_STATUS" value="%s"></label>
@@ -165,7 +183,13 @@ def serve():
         cfg["LIVE_URL"],
         cfg["OPENLDB_URL"], cfg["OPENLDB_CRS"], int(cfg["OPENLDB_ROWS"]),
         int(cfg["OPENLDB_TIME_WINDOW"]), cfg["OPENLDB_SOAP_VERSION"],
+        cfg["OPENLDB_SOAP_ACTION_VERSION"],
         int(cfg["FETCH_INTERVAL"]), int(cfg["UTC_OFFSET_HOURS"]),
+        "selected" if cfg["AUTO_UK_DST"] else "",
+        "" if cfg["AUTO_UK_DST"] else "selected",
+        cfg["NTP_HOST"], int(cfg["NTP_SYNC_INTERVAL"]),
+        cfg["WIFI_COUNTRY"], int(cfg["WIFI_CONNECT_TIMEOUT"]), cfg["WIFI_DNS"],
+        cfg["WIFI_DNS_FALLBACKS"],
         cfg["DEFAULT_SCHED"], cfg["DEFAULT_DESTINATION"], cfg["DEFAULT_STATUS"], cfg["DEFAULT_CALLING"],
         essid, ap_ip)
 
@@ -194,7 +218,19 @@ def serve():
                     "OPENLDB_SOAP_VERSION",
                     new["OPENLDB_SOAP_VERSION"],
                 )
-                for k in ("FETCH_INTERVAL", "UTC_OFFSET_HOURS", "OPENLDB_ROWS", "OPENLDB_TIME_WINDOW"):
+                new["OPENLDB_SOAP_ACTION_VERSION"] = data.get(
+                    "OPENLDB_SOAP_ACTION_VERSION",
+                    new["OPENLDB_SOAP_ACTION_VERSION"],
+                )
+                new["WIFI_COUNTRY"] = data.get("WIFI_COUNTRY", new["WIFI_COUNTRY"]).upper()
+                new["WIFI_DNS"] = data.get("WIFI_DNS", new["WIFI_DNS"])
+                new["WIFI_DNS_FALLBACKS"] = data.get(
+                    "WIFI_DNS_FALLBACKS",
+                    new["WIFI_DNS_FALLBACKS"],
+                )
+                new["AUTO_UK_DST"] = data.get("AUTO_UK_DST", "1") == "1"
+                new["NTP_HOST"] = data.get("NTP_HOST", new["NTP_HOST"])
+                for k in ("FETCH_INTERVAL", "UTC_OFFSET_HOURS", "OPENLDB_ROWS", "OPENLDB_TIME_WINDOW", "WIFI_CONNECT_TIMEOUT", "NTP_SYNC_INTERVAL"):
                     try:
                         new[k] = int(data.get(k, new[k]))
                     except Exception:
