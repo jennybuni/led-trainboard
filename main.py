@@ -50,7 +50,7 @@ LIVE_SOURCE = "json"  # "json" or "openldb"
 OPENLDB_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx"
 OPENLDB_CRS = "OXN"
 OPENLDB_ROWS = 6
-OPENLDB_TIME_WINDOW = 120
+OPENLDB_TIME_WINDOW = 119
 OPENLDB_SOAP_VERSION = "2017-10-01"
 FETCH_INTERVAL = 60  # seconds between data refreshes
 SERVICE_ROTATE_INTERVAL = 300  # seconds between service rotations
@@ -567,7 +567,7 @@ def build_openldb_request(token):
         OPENLDB_SOAP_VERSION
     )
     body = """<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types" xmlns:ldb="{ldb_ns}">
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types" xmlns:ldb="{ldb_ns}">
   <soap:Header>
     <typ:AccessToken>
       <typ:TokenValue>{token}</typ:TokenValue>
@@ -589,6 +589,15 @@ def build_openldb_request(token):
         time_window=OPENLDB_TIME_WINDOW,
     )
     return soap_action, body
+
+
+def summarise_openldb_error(xml):
+    """Return a short SOAP/API error from an OpenLDB response."""
+    for tag_name in ("faultstring", "Text", "message", "Message"):
+        text = find_xml_text(xml, tag_name)
+        if text:
+            return text
+    return ""
 
 
 def parse_openldb_services(xml):
@@ -685,15 +694,23 @@ def load_openldb_services():
     soap_action, body = build_openldb_request(token)
     headers = {
         "Content-Type": "text/xml; charset=utf-8",
-        "SOAPAction": soap_action,
+        "SOAPAction": '"' + soap_action + '"',
+        "Accept-Encoding": "identity",
     }
     resp = None
     try:
         resp = requests.post(OPENLDB_URL, data=body, headers=headers)
         xml = resp.text
+        status_code = getattr(resp, "status_code", None)
+        if status_code and status_code != 200:
+            print("OpenLDB HTTP status:", status_code)
+        fault = summarise_openldb_error(xml)
+        if fault:
+            print("OpenLDB response:", fault[:180])
         services = parse_openldb_services(xml)
         if not services:
             print("OpenLDB returned no displayable services")
+            print("OpenLDB response head:", xml[:240])
         return services
     except Exception as exc:
         print("OpenLDB error:", exc)

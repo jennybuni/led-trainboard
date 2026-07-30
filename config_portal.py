@@ -10,7 +10,7 @@ DEFAULTS = {
     "OPENLDB_URL": "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx",
     "OPENLDB_CRS": "OXN",
     "OPENLDB_ROWS": 6,
-    "OPENLDB_TIME_WINDOW": 120,
+    "OPENLDB_TIME_WINDOW": 119,
     "OPENLDB_SOAP_VERSION": "2017-10-01",
     "FETCH_INTERVAL": 60,
     "UTC_OFFSET_HOURS": 0,

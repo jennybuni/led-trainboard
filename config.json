@@ -1,11 +1,11 @@
 {
-  "LIVE_MODE": false,
+  "LIVE_MODE": true,
   "LIVE_SOURCE": "openldb",
   "LIVE_URL": "",
   "OPENLDB_URL": "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx",
   "OPENLDB_CRS": "OXN",
   "OPENLDB_ROWS": 6,
-  "OPENLDB_TIME_WINDOW": 120,
+  "OPENLDB_TIME_WINDOW": 119,
   "OPENLDB_SOAP_VERSION": "2017-10-01",
   "LOCAL_JSON_PATH": "departures.json",
   "FETCH_INTERVAL": 60,

@@ -27,7 +27,7 @@ To fetch official National Rail OpenLDB data directly from the board, update
   "LIVE_SOURCE": "openldb",
   "OPENLDB_CRS": "OXN",
   "OPENLDB_ROWS": 6,
-  "OPENLDB_TIME_WINDOW": 120
+  "OPENLDB_TIME_WINDOW": 119
 }
 ```
 
