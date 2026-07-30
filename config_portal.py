@@ -4,10 +4,30 @@ import network, time, machine, json, ure, ubinascii, socket
 CFG_FILE = "config.json"
 
 DEFAULTS = {
-    "LIVE_MODE": True,
+    "LIVE_MODE": False,
+    "LIVE_SOURCE": "openldb",
     "LIVE_URL": "http://192.168.1.50:8080/next.json",
+    "OPENLDB_URL": "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx",
+    "OPENLDB_HOST_IP": "63.33.233.219",
+    "OPENLDB_CRS": "OXN",
+    "PLATFORM_FILTER": "1",
+    "OPENLDB_ROWS": 12,
+    "OPENLDB_TIME_WINDOW": 119,
+    "OPENLDB_SOAP_VERSION": "2017-10-01",
+    "OPENLDB_SOAP_ACTION_VERSION": "2015-05-14",
     "FETCH_INTERVAL": 60,
     "UTC_OFFSET_HOURS": 0,
+    "AUTO_UK_DST": True,
+    "NTP_HOST": "pool.ntp.org",
+    "NTP_HOST_IP": "185.51.192.63",
+    "NTP_SYNC_INTERVAL": 86400,
+    "WIFI_COUNTRY": "GB",
+    "WIFI_CONNECT_TIMEOUT": 20,
+    "WIFI_DNS": "gateway",
+    "WIFI_DNS_FALLBACKS": "gateway,1.1.1.1,8.8.8.8",
+    "WIFI_DIAGNOSTICS": False,
+    "WIFI_RECONNECT_ON_FETCH": True,
+    "WIFI_DISCONNECT_AFTER_FETCH": True,
     "DEFAULT_SCHED": "12:24",
     "DEFAULT_DESTINATION": "LONDON EUSTON",
     "DEFAULT_STATUS": "ON TIME",
@@ -29,8 +49,17 @@ def save_config(cfg):
         json.dump(cfg, f)
 
 def write_secrets(ssid, pw):
+    token = ""
+    try:
+        from secrets import OPENLDB_TOKEN  # type: ignore
+        token = OPENLDB_TOKEN
+    except Exception:
+        pass
     with open("secrets.py", "w") as f:
-        f.write('WIFI_SSID=%r\nWIFI_PASSWORD=%r\n' % (ssid, pw))
+        f.write(
+            'WIFI_SSID=%r\nWIFI_PASSWORD=%r\nOPENLDB_TOKEN=%r\n'
+            % (ssid, pw, token)
+        )
 
 def _set_ap_config(ap, **kwargs):
     """Call ap.config with compatibility for essid/ssid and password/key."""
@@ -124,9 +153,39 @@ def serve():
     <label>LIVE_MODE
       <select name="LIVE_MODE"><option %s value="1">True</option><option %s value="0">False</option></select>
     </label>
+    <label>LIVE_SOURCE
+      <select name="LIVE_SOURCE"><option %s value="openldb">OpenLDB</option><option %s value="json">Custom JSON</option></select>
+    </label>
     <label>LIVE_URL <input name="LIVE_URL" value="%s"></label>
+    <label>OPENLDB_URL <input name="OPENLDB_URL" value="%s"></label>
+    <label>OPENLDB_HOST_IP <input name="OPENLDB_HOST_IP" value="%s"></label>
+    <label>OPENLDB_CRS <input name="OPENLDB_CRS" value="%s"></label>
+    <label>PLATFORM_FILTER <input name="PLATFORM_FILTER" value="%s" placeholder="blank for all"></label>
+    <label>OPENLDB_ROWS <input name="OPENLDB_ROWS" type="number" value="%d"></label>
+    <label>OPENLDB_TIME_WINDOW (minutes) <input name="OPENLDB_TIME_WINDOW" type="number" value="%d"></label>
+    <label>OPENLDB_SOAP_VERSION <input name="OPENLDB_SOAP_VERSION" value="%s"></label>
+    <label>OPENLDB_SOAP_ACTION_VERSION <input name="OPENLDB_SOAP_ACTION_VERSION" value="%s"></label>
     <label>FETCH_INTERVAL (seconds) <input name="FETCH_INTERVAL" type="number" value="%d"></label>
     <label>UTC_OFFSET_HOURS <input name="UTC_OFFSET_HOURS" type="number" value="%d"></label>
+    <label>AUTO_UK_DST
+      <select name="AUTO_UK_DST"><option %s value="1">True</option><option %s value="0">False</option></select>
+    </label>
+    <label>NTP_HOST <input name="NTP_HOST" value="%s"></label>
+    <label>NTP_HOST_IP <input name="NTP_HOST_IP" value="%s"></label>
+    <label>NTP_SYNC_INTERVAL (seconds) <input name="NTP_SYNC_INTERVAL" type="number" value="%d"></label>
+    <label>WIFI_COUNTRY <input name="WIFI_COUNTRY" value="%s"></label>
+    <label>WIFI_CONNECT_TIMEOUT (seconds) <input name="WIFI_CONNECT_TIMEOUT" type="number" value="%d"></label>
+    <label>WIFI_DNS <input name="WIFI_DNS" value="%s"></label>
+    <label>WIFI_DNS_FALLBACKS <input name="WIFI_DNS_FALLBACKS" value="%s"></label>
+    <label>WIFI_DIAGNOSTICS
+      <select name="WIFI_DIAGNOSTICS"><option %s value="1">True</option><option %s value="0">False</option></select>
+    </label>
+    <label>WIFI_RECONNECT_ON_FETCH
+      <select name="WIFI_RECONNECT_ON_FETCH"><option %s value="1">True</option><option %s value="0">False</option></select>
+    </label>
+    <label>WIFI_DISCONNECT_AFTER_FETCH
+      <select name="WIFI_DISCONNECT_AFTER_FETCH"><option %s value="1">True</option><option %s value="0">False</option></select>
+    </label>
     <label>DEFAULT_SCHED <input name="DEFAULT_SCHED" value="%s"></label>
     <label>DEFAULT_DESTINATION <input name="DEFAULT_DESTINATION" value="%s"></label>
     <label>DEFAULT_STATUS <input name="DEFAULT_STATUS" value="%s"></label>
@@ -137,7 +196,25 @@ def serve():
     <p>Browse to: <b>http://%s</b></p>
     </body></html>""" % (
         "selected" if cfg["LIVE_MODE"] else "", "" if cfg["LIVE_MODE"] else "selected",
-        cfg["LIVE_URL"], int(cfg["FETCH_INTERVAL"]), int(cfg["UTC_OFFSET_HOURS"]),
+        "selected" if cfg["LIVE_SOURCE"] == "openldb" else "",
+        "selected" if cfg["LIVE_SOURCE"] == "json" else "",
+        cfg["LIVE_URL"],
+        cfg["OPENLDB_URL"], cfg["OPENLDB_HOST_IP"],
+        cfg["OPENLDB_CRS"], cfg["PLATFORM_FILTER"], int(cfg["OPENLDB_ROWS"]),
+        int(cfg["OPENLDB_TIME_WINDOW"]), cfg["OPENLDB_SOAP_VERSION"],
+        cfg["OPENLDB_SOAP_ACTION_VERSION"],
+        int(cfg["FETCH_INTERVAL"]), int(cfg["UTC_OFFSET_HOURS"]),
+        "selected" if cfg["AUTO_UK_DST"] else "",
+        "" if cfg["AUTO_UK_DST"] else "selected",
+        cfg["NTP_HOST"], cfg["NTP_HOST_IP"], int(cfg["NTP_SYNC_INTERVAL"]),
+        cfg["WIFI_COUNTRY"], int(cfg["WIFI_CONNECT_TIMEOUT"]), cfg["WIFI_DNS"],
+        cfg["WIFI_DNS_FALLBACKS"],
+        "selected" if cfg["WIFI_DIAGNOSTICS"] else "",
+        "" if cfg["WIFI_DIAGNOSTICS"] else "selected",
+        "selected" if cfg["WIFI_RECONNECT_ON_FETCH"] else "",
+        "" if cfg["WIFI_RECONNECT_ON_FETCH"] else "selected",
+        "selected" if cfg["WIFI_DISCONNECT_AFTER_FETCH"] else "",
+        "" if cfg["WIFI_DISCONNECT_AFTER_FETCH"] else "selected",
         cfg["DEFAULT_SCHED"], cfg["DEFAULT_DESTINATION"], cfg["DEFAULT_STATUS"], cfg["DEFAULT_CALLING"],
         essid, ap_ip)
 
@@ -158,8 +235,33 @@ def serve():
 
                 new = load_config()
                 new["LIVE_MODE"] = data.get("LIVE_MODE", "1") == "1"
+                new["LIVE_SOURCE"] = data.get("LIVE_SOURCE", new["LIVE_SOURCE"])
                 new["LIVE_URL"] = data.get("LIVE_URL", new["LIVE_URL"])
-                for k in ("FETCH_INTERVAL", "UTC_OFFSET_HOURS"):
+                new["OPENLDB_URL"] = data.get("OPENLDB_URL", new["OPENLDB_URL"])
+                new["OPENLDB_HOST_IP"] = data.get("OPENLDB_HOST_IP", new["OPENLDB_HOST_IP"])
+                new["OPENLDB_CRS"] = data.get("OPENLDB_CRS", new["OPENLDB_CRS"]).upper()
+                new["PLATFORM_FILTER"] = data.get("PLATFORM_FILTER", new["PLATFORM_FILTER"]).upper()
+                new["OPENLDB_SOAP_VERSION"] = data.get(
+                    "OPENLDB_SOAP_VERSION",
+                    new["OPENLDB_SOAP_VERSION"],
+                )
+                new["OPENLDB_SOAP_ACTION_VERSION"] = data.get(
+                    "OPENLDB_SOAP_ACTION_VERSION",
+                    new["OPENLDB_SOAP_ACTION_VERSION"],
+                )
+                new["WIFI_COUNTRY"] = data.get("WIFI_COUNTRY", new["WIFI_COUNTRY"]).upper()
+                new["WIFI_DNS"] = data.get("WIFI_DNS", new["WIFI_DNS"])
+                new["WIFI_DNS_FALLBACKS"] = data.get(
+                    "WIFI_DNS_FALLBACKS",
+                    new["WIFI_DNS_FALLBACKS"],
+                )
+                new["WIFI_DIAGNOSTICS"] = data.get("WIFI_DIAGNOSTICS", "0") == "1"
+                new["WIFI_RECONNECT_ON_FETCH"] = data.get("WIFI_RECONNECT_ON_FETCH", "1") == "1"
+                new["WIFI_DISCONNECT_AFTER_FETCH"] = data.get("WIFI_DISCONNECT_AFTER_FETCH", "1") == "1"
+                new["AUTO_UK_DST"] = data.get("AUTO_UK_DST", "1") == "1"
+                new["NTP_HOST"] = data.get("NTP_HOST", new["NTP_HOST"])
+                new["NTP_HOST_IP"] = data.get("NTP_HOST_IP", new["NTP_HOST_IP"])
+                for k in ("FETCH_INTERVAL", "UTC_OFFSET_HOURS", "OPENLDB_ROWS", "OPENLDB_TIME_WINDOW", "WIFI_CONNECT_TIMEOUT", "NTP_SYNC_INTERVAL"):
                     try:
                         new[k] = int(data.get(k, new[k]))
                     except Exception:
@@ -169,7 +271,7 @@ def serve():
                 save_config(new)
 
                 cl.send(b"HTTP/1.1 200 OK\r\nContent-Type:text/html\r\n\r\n"
-                        b"<meta http-equiv='refresh' content='2;url=/'><body>Saved. Rebooting\u2026</body>")
+                        b"<meta http-equiv='refresh' content='2;url=/'><body>Saved. Rebooting...</body>")
                 cl.close()
                 time.sleep(2)
                 machine.reset()
@@ -185,4 +287,3 @@ def serve():
             cl.close()
 
 serve()
-
