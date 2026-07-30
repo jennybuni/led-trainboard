@@ -1,7 +1,7 @@
 {
   "LIVE_MODE": true,
-  "LIVE_SOURCE": "openldb",
-  "LIVE_URL": "",
+  "LIVE_SOURCE": "json",
+  "LIVE_URL": "http://192.168.1.50:8080/next.json",
   "OPENLDB_URL": "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx",
   "OPENLDB_HOST_IP": "63.33.233.219",
   "OPENLDB_CRS": "OXN",

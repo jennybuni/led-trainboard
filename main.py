@@ -59,13 +59,15 @@ except ImportError:
 # -----------------------------------------------------------------------------
 
 CONFIG_JSON_PATH = "config.json"
-APP_VERSION = "2026-07-30-manual-dns-v3"
+APP_VERSION = "2026-07-30-on-demand-wifi-v18"
 LOCAL_JSON_PATH = "departures.json"  # set to None to skip local file lookups
 REMOTE_JSON_URL = None  # populated from config.json when LIVE_MODE is enabled
 LIVE_SOURCE = "json"  # "json" or "openldb"
 OPENLDB_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx"
+OPENLDB_HOST_IP = "63.33.233.219"
 OPENLDB_CRS = "OXN"
-OPENLDB_ROWS = 6
+PLATFORM_FILTER = "1"
+OPENLDB_ROWS = 12
 OPENLDB_TIME_WINDOW = 119
 OPENLDB_SOAP_VERSION = "2017-10-01"
 OPENLDB_SOAP_ACTION_VERSION = "2015-05-14"
@@ -74,11 +76,15 @@ SERVICE_ROTATE_INTERVAL = 300  # seconds between service rotations
 UTC_OFFSET_HOURS = 0  # adjust if you want local time displayed
 AUTO_UK_DST = True
 NTP_HOST = "pool.ntp.org"
-NTP_SYNC_INTERVAL = 3600  # seconds between clock resyncs
+NTP_HOST_IP = "185.51.192.63"
+NTP_SYNC_INTERVAL = 86400  # seconds between clock resyncs
 WIFI_COUNTRY = "GB"
 WIFI_CONNECT_TIMEOUT = 20  # seconds
 WIFI_DNS = "gateway"
 WIFI_DNS_FALLBACKS = "gateway,1.1.1.1,8.8.8.8"
+WIFI_DIAGNOSTICS = False
+WIFI_RECONNECT_ON_FETCH = True
+WIFI_DISCONNECT_AFTER_FETCH = True
 
 # Manual advance debounce for Interstate75 switch inputs
 BUTTON_DEBOUNCE_MS = 200
@@ -88,6 +94,7 @@ DEFAULT_SERVICE = {
     "destination": "London Euston",
     "status": "On time",
     "calling": "Watford Junction, Milton Keynes Central, Rugby, Coventry, Birmingham Int'l",
+    "platform": "",
 }
 
 DEFAULT_CONFIG = {
@@ -95,7 +102,9 @@ DEFAULT_CONFIG = {
     "LIVE_SOURCE": LIVE_SOURCE,
     "LIVE_URL": "",
     "OPENLDB_URL": OPENLDB_URL,
+    "OPENLDB_HOST_IP": OPENLDB_HOST_IP,
     "OPENLDB_CRS": OPENLDB_CRS,
+    "PLATFORM_FILTER": PLATFORM_FILTER,
     "OPENLDB_ROWS": OPENLDB_ROWS,
     "OPENLDB_TIME_WINDOW": OPENLDB_TIME_WINDOW,
     "OPENLDB_SOAP_VERSION": OPENLDB_SOAP_VERSION,
@@ -106,20 +115,25 @@ DEFAULT_CONFIG = {
     "UTC_OFFSET_HOURS": UTC_OFFSET_HOURS,
     "AUTO_UK_DST": AUTO_UK_DST,
     "NTP_HOST": NTP_HOST,
+    "NTP_HOST_IP": NTP_HOST_IP,
     "NTP_SYNC_INTERVAL": NTP_SYNC_INTERVAL,
     "WIFI_COUNTRY": WIFI_COUNTRY,
     "WIFI_CONNECT_TIMEOUT": WIFI_CONNECT_TIMEOUT,
     "WIFI_DNS": WIFI_DNS,
     "WIFI_DNS_FALLBACKS": WIFI_DNS_FALLBACKS,
+    "WIFI_DIAGNOSTICS": WIFI_DIAGNOSTICS,
+    "WIFI_RECONNECT_ON_FETCH": WIFI_RECONNECT_ON_FETCH,
+    "WIFI_DISCONNECT_AFTER_FETCH": WIFI_DISCONNECT_AFTER_FETCH,
     "DEFAULT_SCHED": DEFAULT_SERVICE["sched"],
     "DEFAULT_DESTINATION": DEFAULT_SERVICE["destination"],
     "DEFAULT_STATUS": DEFAULT_SERVICE["status"],
     "DEFAULT_CALLING": DEFAULT_SERVICE["calling"],
+    "DEFAULT_PLATFORM": DEFAULT_SERVICE["platform"],
 }
 
-# Ticker timing (pixel-based)
-TICKER_MS = 120
-TICKER_STEP_PX = 1
+# Calling-point row timing
+CALLING_SCROLL_MS = 260
+CALLING_VISIBLE_CHARS = 21
 
 # Built-in font & scale
 FONT_NAME = "bitmap8"
@@ -139,6 +153,7 @@ DISPLAY_HEIGHT = i75.height
 # Colours
 COL_BLACK = (0, 0, 0)
 COL_ORANGE = (255, 0, 140)
+COL_DIM_ORANGE = (80, 0, 36)
 COL_GREEN = (0, 50, 255)
 COL_RED = (255, 0, 0)
 COL_BLUE = (0, 120, 255)
@@ -146,17 +161,22 @@ COL_BLUE = (0, 120, 255)
 BLACK_PEN = graphics.create_pen(*COL_BLACK)
 
 # State
-svc_state = None  # (sched, destination, status, calling)
+svc_state = None  # (sched, destination, status, calling, platform)
 svc_services = []  # list of available services
 current_service_idx = 0
 ticker_text = ""
 ticker_w = 1
 ticker_px = 0
+ticker_char_idx = 0
+calling_points = []
+calling_scroll_idx = 0
 last_fetch_ms = 0
 last_scroll_ms = 0
 last_rotate_ms = 0
 last_source = "defaults"
+last_successful_update_ms = 0
 wifi_ok = False
+wlan = None
 last_button_state = False
 last_button_ms = 0
 last_source_button_state = False
@@ -209,10 +229,11 @@ def apply_runtime_config():
     """Apply config.json values to module-level settings."""
     global LOCAL_JSON_PATH, REMOTE_JSON_URL, FETCH_INTERVAL, SERVICE_ROTATE_INTERVAL
     global UTC_OFFSET_HOURS, DEFAULT_SERVICE, prefer_remote
-    global LIVE_SOURCE, OPENLDB_URL, OPENLDB_CRS, OPENLDB_ROWS, OPENLDB_TIME_WINDOW
+    global LIVE_SOURCE, OPENLDB_URL, OPENLDB_HOST_IP, OPENLDB_CRS, PLATFORM_FILTER, OPENLDB_ROWS, OPENLDB_TIME_WINDOW
     global OPENLDB_SOAP_VERSION, OPENLDB_SOAP_ACTION_VERSION
-    global AUTO_UK_DST, NTP_HOST, NTP_SYNC_INTERVAL
+    global AUTO_UK_DST, NTP_HOST, NTP_HOST_IP, NTP_SYNC_INTERVAL
     global WIFI_COUNTRY, WIFI_CONNECT_TIMEOUT, WIFI_DNS, WIFI_DNS_FALLBACKS
+    global WIFI_DIAGNOSTICS, WIFI_RECONNECT_ON_FETCH, WIFI_DISCONNECT_AFTER_FETCH
 
     cfg = load_runtime_config()
 
@@ -226,6 +247,7 @@ def apply_runtime_config():
     UTC_OFFSET_HOURS = _int_from_config(cfg.get("UTC_OFFSET_HOURS"), UTC_OFFSET_HOURS)
     AUTO_UK_DST = _bool_from_config(cfg.get("AUTO_UK_DST"))
     NTP_HOST = str(cfg.get("NTP_HOST") or NTP_HOST).strip()
+    NTP_HOST_IP = str(cfg.get("NTP_HOST_IP") or NTP_HOST_IP).strip()
     NTP_SYNC_INTERVAL = _int_from_config(
         cfg.get("NTP_SYNC_INTERVAL"),
         NTP_SYNC_INTERVAL,
@@ -239,6 +261,11 @@ def apply_runtime_config():
     WIFI_DNS_FALLBACKS = str(
         cfg.get("WIFI_DNS_FALLBACKS") or WIFI_DNS_FALLBACKS
     ).strip()
+    WIFI_DIAGNOSTICS = _bool_from_config(cfg.get("WIFI_DIAGNOSTICS"))
+    WIFI_RECONNECT_ON_FETCH = _bool_from_config(cfg.get("WIFI_RECONNECT_ON_FETCH"))
+    WIFI_DISCONNECT_AFTER_FETCH = _bool_from_config(
+        cfg.get("WIFI_DISCONNECT_AFTER_FETCH")
+    )
 
     DEFAULT_SERVICE = {
         "sched": str(cfg.get("DEFAULT_SCHED") or DEFAULT_SERVICE["sched"]),
@@ -247,13 +274,16 @@ def apply_runtime_config():
         ),
         "status": str(cfg.get("DEFAULT_STATUS") or DEFAULT_SERVICE["status"]),
         "calling": str(cfg.get("DEFAULT_CALLING") or DEFAULT_SERVICE["calling"]),
+        "platform": str(cfg.get("DEFAULT_PLATFORM") or DEFAULT_SERVICE["platform"]),
     }
 
     prefer_remote = _bool_from_config(cfg.get("LIVE_MODE"))
     live_url = str(cfg.get("LIVE_URL") or "").strip()
     REMOTE_JSON_URL = live_url or None
     OPENLDB_URL = str(cfg.get("OPENLDB_URL") or OPENLDB_URL).strip()
+    OPENLDB_HOST_IP = str(cfg.get("OPENLDB_HOST_IP") or OPENLDB_HOST_IP).strip()
     OPENLDB_CRS = str(cfg.get("OPENLDB_CRS") or OPENLDB_CRS).strip().upper()
+    PLATFORM_FILTER = str(cfg.get("PLATFORM_FILTER") or "").strip().upper()
     OPENLDB_ROWS = _int_from_config(cfg.get("OPENLDB_ROWS"), OPENLDB_ROWS)
     OPENLDB_TIME_WINDOW = _int_from_config(
         cfg.get("OPENLDB_TIME_WINDOW"),
@@ -280,6 +310,8 @@ def apply_runtime_config():
 
 def connect_wifi():
     """Connect using secrets.py; return True if connected."""
+    global wlan
+
     if network is None:
         print("Wi-Fi module unavailable; running without remote JSON")
         return False
@@ -301,7 +333,9 @@ def connect_wifi():
         except Exception:
             pass
 
-    wlan = network.WLAN(network.STA_IF)
+    if wlan is None:
+        wlan = network.WLAN(network.STA_IF)
+
     wlan.active(True)
     try:
         wlan.config(pm=0x11140)  # reduce power saving issues on some APs
@@ -310,10 +344,6 @@ def connect_wifi():
 
     if not wlan.isconnected():
         print("Connecting to Wi-Fi:", ssid)
-        try:
-            wlan.disconnect()
-        except Exception:
-            pass
         wlan.connect(ssid, password)
         wait_loops = max(1, WIFI_CONNECT_TIMEOUT * 10)
         for _ in range(wait_loops):
@@ -341,11 +371,12 @@ def connect_wifi():
             print("Connected; ifconfig error:", exc)
 
         install_dns_fallback(gateway)
-        check_dns_resolution(NTP_HOST, 123)
-        if LIVE_SOURCE == "openldb":
-            check_dns_resolution(host_from_url(OPENLDB_URL), 443)
-        elif REMOTE_JSON_URL:
-            check_dns_resolution(host_from_url(REMOTE_JSON_URL), 80)
+        if WIFI_DIAGNOSTICS:
+            check_dns_resolution(NTP_HOST, 123)
+            if LIVE_SOURCE == "openldb":
+                check_dns_resolution(host_from_url(OPENLDB_URL), 443)
+            elif REMOTE_JSON_URL:
+                check_dns_resolution(host_from_url(REMOTE_JSON_URL), 80)
         return True
 
     try:
@@ -353,6 +384,50 @@ def connect_wifi():
     except Exception:
         print("Failed to connect to Wi-Fi")
     return False
+
+
+def ensure_wifi_for_fetch():
+    """Reconnect Wi-Fi before a data fetch if the interface has dropped."""
+    global wifi_ok, wlan
+
+    if not live_source_configured():
+        return False
+
+    connected = False
+    if wlan is not None:
+        try:
+            connected = wlan.isconnected()
+        except Exception:
+            connected = False
+
+    if connected:
+        wifi_ok = True
+        return True
+
+    print("Wi-Fi not connected before fetch; reconnecting")
+    wifi_ok = connect_wifi()
+    return wifi_ok
+
+
+def disconnect_wifi_after_fetch():
+    """Drop Wi-Fi after a refresh so the next refresh starts cleanly."""
+    global wifi_ok, wlan
+
+    if not WIFI_DISCONNECT_AFTER_FETCH or wlan is None:
+        return
+
+    try:
+        if wlan.isconnected():
+            wlan.disconnect()
+            print("Wi-Fi disconnected after fetch")
+    except Exception as exc:
+        print("Wi-Fi disconnect after fetch failed:", exc)
+
+    try:
+        wlan.active(False)
+    except Exception:
+        pass
+    wifi_ok = False
 
 
 def host_from_url(url):
@@ -495,6 +570,17 @@ def manual_dns_lookup(host):
     return None
 
 
+def resolve_host_with_static(host, fallback_ip):
+    ip = manual_dns_lookup(host)
+    if ip:
+        return ip
+    fallback = str(fallback_ip or "").strip()
+    if fallback:
+        print("Using static IP for", host, fallback)
+        return fallback
+    return None
+
+
 def fallback_getaddrinfo(host, port, family=0, socktype=0, proto=0, flags=0):
     if original_getaddrinfo:
         try:
@@ -502,7 +588,12 @@ def fallback_getaddrinfo(host, port, family=0, socktype=0, proto=0, flags=0):
         except Exception:
             pass
 
-    ip = manual_dns_lookup(host)
+    fallback_ip = ""
+    if host == NTP_HOST:
+        fallback_ip = NTP_HOST_IP
+    elif host == host_from_url(OPENLDB_URL):
+        fallback_ip = OPENLDB_HOST_IP
+    ip = resolve_host_with_static(host, fallback_ip)
     if not ip:
         raise OSError(-2)
 
@@ -525,7 +616,7 @@ def manual_ntp_sync(host):
     if socket is None:
         return False
 
-    ip = manual_dns_lookup(host)
+    ip = resolve_host_with_static(host, NTP_HOST_IP)
     if not ip:
         return False
 
@@ -641,7 +732,35 @@ def normalise_service(entry):
     if not calling:
         calling = DEFAULT_SERVICE["calling"]
 
-    return (sched, destination, status, calling)
+    platform = str(entry.get("platform") or entry.get("plat") or "").strip()
+    if platform.upper() in ("NONE", "UNKNOWN"):
+        platform = ""
+
+    return (sched, destination, status, calling, platform)
+
+
+def platform_matches(service):
+    if not PLATFORM_FILTER:
+        return True
+    if len(service) < 5:
+        return False
+    return str(service[4]).strip().upper() == PLATFORM_FILTER
+
+
+def filter_services_by_platform(services):
+    if not PLATFORM_FILTER:
+        return services
+
+    filtered = []
+    for service in services:
+        if platform_matches(service):
+            filtered.append(service)
+
+    if services and not filtered:
+        print("No services for platform", PLATFORM_FILTER)
+    elif filtered:
+        print("Filtered to platform", PLATFORM_FILTER, ":", len(filtered), "services")
+    return filtered
 
 
 def parse_sched_to_seconds(value):
@@ -732,6 +851,12 @@ def fetch_services_payload():
 
     if prefer_remote and live_source_configured():
         services = load_remote()
+        if not services and last_source == "remote" and svc_services:
+            return {
+                "services": [],
+                "source": None,
+                "wifi_drop": False,
+            }
         if not services:
             services = load_local_from_cache()
         if not services:
@@ -743,7 +868,7 @@ def fetch_services_payload():
         if not services:
             services = load_remote()
 
-    wifi_drop = attempted_remote and source_label != "remote"
+    wifi_drop = False
     return {
         "services": services,
         "source": source_label,
@@ -754,7 +879,7 @@ def fetch_services_payload():
 def apply_services_payload(services, source_label):
     """Update global state with freshly loaded services."""
     global svc_services, svc_schedule_seconds, current_service_idx, last_source, last_rotate_ms
-    global local_services_cached
+    global local_services_cached, last_successful_update_ms
 
     services = sorted(services, key=service_sort_key)
     svc_services = services
@@ -771,6 +896,7 @@ def apply_services_payload(services, source_label):
     if source_label == "local":
         local_services_cached = list(svc_services)
     last_rotate_ms = time.ticks_ms()
+    last_successful_update_ms = last_rotate_ms
     if len(svc_services) > 1:
         print("Loaded", len(svc_services), "services from", last_source)
     else:
@@ -790,7 +916,10 @@ def apply_fetched_services(result):
         wifi_ok = False
 
     if not services:
-        print("No service data available; retaining previous values")
+        if last_source == "remote" and svc_services:
+            print("Remote refresh failed; retaining previous live services")
+        else:
+            print("No service data available; retaining previous values")
         return False
 
     apply_services_payload(services, source_label)
@@ -949,6 +1078,7 @@ def parse_openldb_services(xml):
             destination = find_xml_text(service_xml, "destination")
 
         status = find_xml_text(service_xml, "etd", "On time")
+        platform = find_xml_text(service_xml, "platform")
         calling = []
         subsequent = find_xml_blocks(service_xml, "subsequentCallingPoints")
         search_area = subsequent[0] if subsequent else service_xml
@@ -963,6 +1093,7 @@ def parse_openldb_services(xml):
                 "destination": destination,
                 "status": status,
                 "calling": calling,
+                "platform": platform,
             }
         )
         if svc:
@@ -978,7 +1109,7 @@ def load_local_services():
     try:
         with open(LOCAL_JSON_PATH) as f:
             payload = json.load(f)
-        services = extract_services(payload)
+        services = filter_services_by_platform(extract_services(payload))
         if not services:
             print("Local JSON has no displayable services:", LOCAL_JSON_PATH)
         return services
@@ -1003,7 +1134,7 @@ def load_remote_services():
     try:
         resp = requests.get(REMOTE_JSON_URL)
         payload = resp.json()
-        result = extract_services(payload)
+        result = filter_services_by_platform(extract_services(payload))
     except Exception as exc:
         print("Remote JSON error:", exc)
         result = []
@@ -1048,7 +1179,7 @@ def load_openldb_services():
         fault = summarise_openldb_error(xml)
         if fault:
             print("OpenLDB response:", fault[:180])
-        services = parse_openldb_services(xml)
+        services = filter_services_by_platform(parse_openldb_services(xml))
         if not services:
             print("OpenLDB returned no displayable services")
             print("OpenLDB response head:", xml[:240])
@@ -1057,7 +1188,7 @@ def load_openldb_services():
         print("OpenLDB error:", exc)
         xml = post_openldb_direct(OPENLDB_URL, body, headers)
         if xml:
-            services = parse_openldb_services(xml)
+            services = filter_services_by_platform(parse_openldb_services(xml))
             if not services:
                 print("OpenLDB direct returned no displayable services")
                 print("OpenLDB direct response head:", xml[:240])
@@ -1088,7 +1219,7 @@ def post_openldb_direct(url, body, headers):
 
     host = host_from_url(url)
     path = path_from_url(url)
-    ip = manual_dns_lookup(host)
+    ip = resolve_host_with_static(host, OPENLDB_HOST_IP)
     if not ip:
         return None
 
@@ -1150,11 +1281,21 @@ def strip_calling_prefix(text):
     return value[11:].lstrip() if value.upper().startswith("CALLING AT:") else value
 
 
-def build_ticker_text(raw):
-    base = strip_calling_prefix(raw).upper()
-    if not base:
-        base = "NO CALLING POINTS"
-    return "CALLING AT: " + base + "         "
+def build_calling_points(raw):
+    base = strip_calling_prefix(raw)
+    points = []
+    for part in base.split(","):
+        point = part.strip()
+        if point:
+            points.append(point.upper())
+    if not points:
+        points.append("NO CALLING POINTS")
+    return points
+
+
+def build_calling_text(raw):
+    points = build_calling_points(raw)
+    return "VIA " + ", ".join(points) + "     "
 
 
 def format_status_for_display(status):
@@ -1175,13 +1316,42 @@ def format_status_for_display(status):
     return upper
 
 
+def update_status_text(now_ms):
+    if not last_successful_update_ms:
+        return "NO UPD"
+
+    age_ms = time.ticks_diff(now_ms, last_successful_update_ms)
+    if age_ms < 0:
+        age_ms = 0
+    age_min = age_ms // 60000
+
+    prefix = "LIVE" if last_source == "remote" else "LOCAL"
+    if age_min <= 0:
+        return prefix
+    if age_min < 100:
+        return "{} {}M".format(prefix, age_min)
+    return "{} OLD".format(prefix)
+
+
 def apply_service(service):
-    global svc_state, ticker_text, ticker_w, ticker_px
+    global svc_state, ticker_text, ticker_w, ticker_px, ticker_char_idx
+    global calling_points, calling_scroll_idx
 
     svc_state = service
-    ticker_text = build_ticker_text(service[3])
+    calling_points = build_calling_points(service[3])
+    ticker_text = build_calling_text(service[3])
     ticker_w = max(1, int(graphics.measure_text(ticker_text, SCALE_MAIN)))
     ticker_px = 0
+    ticker_char_idx = 0
+    calling_scroll_idx = 0
+
+
+def visible_ticker_text():
+    if not ticker_text:
+        return ""
+    doubled = ticker_text + ticker_text
+    idx = calling_scroll_idx % len(ticker_text)
+    return doubled[idx : idx + CALLING_VISIBLE_CHARS]
 
 
 def advance_service(now_ms, manual=False):
@@ -1308,7 +1478,9 @@ def get_local_time():
 
 def refresh_service():
     result = fetch_services_payload()
-    return apply_fetched_services(result)
+    ok = apply_fetched_services(result)
+    disconnect_wifi_after_fetch()
+    return ok
 
 
 def start_async_refresh():
@@ -1338,6 +1510,7 @@ def start_async_refresh():
                 "wifi_drop": False,
                 "error": "Async refresh failed: {}".format(exc),
             }
+        disconnect_wifi_after_fetch()
         if refresh_lock:
             refresh_lock.acquire()
             pending_refresh_result = result
@@ -1394,9 +1567,10 @@ def trigger_fetch(now_ms, force=False):
         if elapsed >= 0 and elapsed < FETCH_INTERVAL * 1000:
             return
 
-    if live_source_configured() and not wifi_ok:
-        wifi_ok = connect_wifi()
-        if wifi_ok:
+    if live_source_configured() and (WIFI_RECONNECT_ON_FETCH or not wifi_ok):
+        was_synced = ntp_synced
+        wifi_ok = ensure_wifi_for_fetch()
+        if wifi_ok and not was_synced:
             sync_time(now_ms)
 
     if not start_async_refresh():
@@ -1429,6 +1603,9 @@ def toggle_data_source(now_ms):
 # -----------------------------------------------------------------------------
 
 def draw():
+    now_ms = time.ticks_ms()
+
+    graphics.set_clip(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT)
     graphics.set_pen(BLACK_PEN)
     graphics.clear()
     graphics.set_font(FONT_NAME)
@@ -1448,13 +1625,13 @@ def draw():
     graphics.set_pen(graphics.create_pen(*dot_col))
     graphics.pixel(0, 0)
 
-    sched, dest, status, _ = svc_state
+    sched, dest, status, _, platform = svc_state
 
     status_text = format_status_for_display(status)
     status_pen = COL_ORANGE
     if "ON" in status_text and "TIME" in status_text:
         status_pen = COL_GREEN
-    elif any(word in status_text for word in ("CANCEL", "DELAY", "LATE")):
+    elif any(word in status_text for word in ("CANCEL", "DELAY", "LATE", "EXP")):
         status_pen = COL_RED
 
     graphics.set_pen(graphics.create_pen(*COL_ORANGE))
@@ -1463,29 +1640,44 @@ def draw():
     status_w = int(graphics.measure_text(status_text, SCALE_MAIN))
     left_w = DISPLAY_WIDTH - status_w - 3
 
+    sched_text = sched.upper()
+    if platform:
+        sched_text += " P" + platform.upper()
+
     graphics.set_clip(0, 0, max(0, left_w), 8)
-    graphics.text(sched.upper(), 1, 0, scale=SCALE_MAIN)
+    graphics.set_pen(BLACK_PEN)
+    graphics.clear()
+    graphics.set_pen(graphics.create_pen(*COL_ORANGE))
+    graphics.text(sched_text, 1, 0, scale=SCALE_MAIN)
 
     graphics.set_clip(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT)
     graphics.set_pen(graphics.create_pen(*status_pen))
     graphics.text(status_text, DISPLAY_WIDTH - status_w, 0, scale=SCALE_MAIN)
 
-    graphics.set_pen(graphics.create_pen(*COL_ORANGE))
     graphics.set_clip(0, 8, DISPLAY_WIDTH, 8)
+    graphics.set_pen(BLACK_PEN)
+    graphics.clear()
+    graphics.set_pen(graphics.create_pen(*COL_ORANGE))
     graphics.text(dest.upper(), 1, 8, scale=SCALE_MAIN)
 
-    if ticker_text:
+    if calling_points:
         graphics.set_clip(0, 16, DISPLAY_WIDTH, 8)
+        graphics.set_pen(BLACK_PEN)
+        graphics.clear()
         graphics.set_pen(graphics.create_pen(*COL_ORANGE))
-        x1 = 1 - ticker_px
-        graphics.text(ticker_text, x1, 16, scale=SCALE_MAIN)
-        graphics.text(ticker_text, x1 + ticker_w, 16, scale=SCALE_MAIN)
+        graphics.text(visible_ticker_text(), 1, 16, scale=SCALE_MAIN)
 
     graphics.set_clip(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT)
     hh, mm, ss = get_local_time()
     tstr = "--:--:--" if hh is None else f"{hh:02d}:{mm:02d}:{ss:02d}"
+    update_text = update_status_text(now_ms)
+    graphics.set_clip(0, 24, DISPLAY_WIDTH, 8)
+    graphics.set_pen(BLACK_PEN)
+    graphics.clear()
+    graphics.set_pen(graphics.create_pen(*COL_ORANGE))
+    graphics.text(update_text, 1, 24, scale=SCALE_CLOCK)
     tw = int(graphics.measure_text(tstr, SCALE_CLOCK))
-    tx = (DISPLAY_WIDTH - tw) // 2
+    tx = DISPLAY_WIDTH - tw
     graphics.text(tstr, tx, 24, scale=SCALE_CLOCK)
 
     i75.update()
@@ -1496,7 +1688,7 @@ def draw():
 # -----------------------------------------------------------------------------
 
 def main():
-    global svc_state, ticker_text, ticker_w, ticker_px
+    global svc_state, ticker_text, ticker_w, ticker_px, ticker_char_idx, calling_scroll_idx
     global last_fetch_ms, last_scroll_ms, last_rotate_ms
     global wifi_ok, svc_services, current_service_idx
     global last_button_state, last_button_ms, svc_schedule_seconds
@@ -1511,6 +1703,7 @@ def main():
         DEFAULT_SERVICE["destination"],
         DEFAULT_SERVICE["status"],
         DEFAULT_SERVICE["calling"],
+        DEFAULT_SERVICE["platform"],
     )
 
     svc_services = [default_service]
@@ -1560,9 +1753,9 @@ def main():
             if source_pressed:
                 toggle_data_source(now)
 
-        if ticker_text and time.ticks_diff(now, last_scroll_ms) >= TICKER_MS:
+        if ticker_text and time.ticks_diff(now, last_scroll_ms) >= CALLING_SCROLL_MS:
             last_scroll_ms = now
-            ticker_px = (ticker_px + TICKER_STEP_PX) % ticker_w
+            calling_scroll_idx = (calling_scroll_idx + 1) % len(ticker_text)
 
         draw()
         time.sleep_ms(10)

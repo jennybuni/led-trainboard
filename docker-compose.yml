@@ -1,0 +1,14 @@
+services:
+  openldb-proxy:
+    build: ./proxy
+    ports:
+      - "8080:8080"
+    environment:
+      OPENLDB_TOKEN: "${OPENLDB_TOKEN}"
+      OPENLDB_CRS: "${OPENLDB_CRS:-OXN}"
+      PLATFORM_FILTER: "${PLATFORM_FILTER:-1}"
+      OPENLDB_ROWS: "${OPENLDB_ROWS:-12}"
+      OPENLDB_TIME_WINDOW: "${OPENLDB_TIME_WINDOW:-119}"
+      CACHE_TTL_SECONDS: "${CACHE_TTL_SECONDS:-30}"
+      REFRESH_INTERVAL_SECONDS: "${REFRESH_INTERVAL_SECONDS:-55}"
+    restart: unless-stopped
